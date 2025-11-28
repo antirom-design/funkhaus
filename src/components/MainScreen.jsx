@@ -8,6 +8,7 @@ function MainScreen({
   houseCode,
   roomName,
   isHousemaster,
+  isAdmin,
   mode,
   rooms,
   messages,
@@ -23,7 +24,10 @@ function MainScreen({
   onTalkToAll,
   onTalkToRoom,
   onStopTalking,
-  onSendChat
+  onSendChat,
+  onAdminLogin,
+  onAdminLogout,
+  onKillAllAudio
 }) {
   const getModeDisplay = () => {
     switch(mode) {
@@ -94,6 +98,7 @@ function MainScreen({
 
       <Controls
         isHousemaster={isHousemaster}
+        isAdmin={isAdmin}
         mode={mode}
         selectedRoom={selectedRoom}
         isTalking={isTalking}
@@ -102,6 +107,9 @@ function MainScreen({
         onTalkToAll={onTalkToAll}
         onTalkToRoom={onTalkToRoom}
         onStopTalking={onStopTalking}
+        onAdminLogin={onAdminLogin}
+        onAdminLogout={onAdminLogout}
+        onKillAllAudio={onKillAllAudio}
       />
     </div>
   )

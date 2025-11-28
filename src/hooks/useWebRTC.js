@@ -17,13 +17,23 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       handleRemoteSignal(from, signal, target)
     }
 
+    // Listen for force stop talking from admin
+    const handleForceStop = (event) => {
+      console.log('Force stop talking:', event.detail)
+      if (isTalking) {
+        stopTalking()
+      }
+    }
+
     window.addEventListener('webrtc-signal', handleSignal)
+    window.addEventListener('force-stop-talking', handleForceStop)
 
     return () => {
       window.removeEventListener('webrtc-signal', handleSignal)
+      window.removeEventListener('force-stop-talking', handleForceStop)
       cleanup()
     }
-  }, [roomName])
+  }, [roomName, isTalking])
 
   const cleanup = () => {
     if (animationFrame.current) {
@@ -56,6 +66,11 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
 
   const startAudioLevelMonitoring = (stream) => {
     try {
+      // Close existing audio context if present
+      if (audioContext.current) {
+        audioContext.current.close()
+      }
+
       audioContext.current = new (window.AudioContext || window.webkitAudioContext)()
       analyser.current = audioContext.current.createAnalyser()
       const source = audioContext.current.createMediaStreamSource(stream)
@@ -66,6 +81,11 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       const dataArray = new Uint8Array(analyser.current.frequencyBinCount)
 
       const updateLevel = () => {
+        if (!analyser.current || !localStream.current) {
+          // Stop monitoring if stream is gone
+          return
+        }
+
         analyser.current.getByteFrequencyData(dataArray)
         const average = dataArray.reduce((a, b) => a + b) / dataArray.length
         const level = Math.min(100, (average / 128) * 100)
@@ -75,9 +95,8 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
           onAudioLevel(roomName, level)
         }
 
-        if (isTalking) {
-          animationFrame.current = requestAnimationFrame(updateLevel)
-        }
+        // Continue monitoring as long as stream exists
+        animationFrame.current = requestAnimationFrame(updateLevel)
       }
 
       updateLevel()
@@ -229,17 +248,46 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       console.log('Received remote track from:', peerId, event.track.kind)
 
       if (event.streams && event.streams[0]) {
+        const stream = event.streams[0]
+
+        // Always update or create audio element
         if (!remoteAudios.current[peerId]) {
           const audio = new Audio()
           audio.autoplay = true
-          audio.srcObject = event.streams[0]
+          audio.volume = 1.0
           remoteAudios.current[peerId] = audio
+          console.log('Created new audio element for:', peerId)
+        }
 
-          audio.play().then(() => {
-            console.log('Playing audio from:', peerId)
-          }).catch(error => {
-            console.error('Error playing audio:', error)
-          })
+        const audio = remoteAudios.current[peerId]
+        audio.srcObject = stream
+
+        // Ensure audio plays (handle autoplay restrictions)
+        const playAudio = () => {
+          audio.play()
+            .then(() => {
+              console.log('✓ Playing audio from:', peerId)
+            })
+            .catch(error => {
+              console.error('Error playing audio from', peerId, ':', error)
+              // Retry after a short delay
+              setTimeout(playAudio, 100)
+            })
+        }
+
+        playAudio()
+
+        // Monitor track state
+        event.track.onended = () => {
+          console.log('Track ended from:', peerId)
+        }
+
+        event.track.onmute = () => {
+          console.log('Track muted from:', peerId)
+        }
+
+        event.track.onunmute = () => {
+          console.log('Track unmuted from:', peerId)
         }
       }
     }
@@ -258,15 +306,35 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
 
     pc.oniceconnectionstatechange = () => {
       console.log('ICE connection state for', peerId, ':', pc.iceConnectionState)
-      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        console.log('Connection lost with:', peerId)
+
+      // Only close on 'failed', not 'disconnected' (which can recover)
+      if (pc.iceConnectionState === 'failed') {
+        console.error('Connection failed with:', peerId, '- will retry')
+
+        // Clean up failed connection
         if (peerConnections.current[peerId]) {
           peerConnections.current[peerId].close()
           delete peerConnections.current[peerId]
         }
         if (remoteAudios.current[peerId]) {
           remoteAudios.current[peerId].pause()
+          remoteAudios.current[peerId].srcObject = null
           delete remoteAudios.current[peerId]
+        }
+      } else if (pc.iceConnectionState === 'connected') {
+        console.log('Successfully connected to:', peerId)
+      } else if (pc.iceConnectionState === 'disconnected') {
+        console.warn('Temporarily disconnected from:', peerId, '- attempting to reconnect')
+        // Don't close yet, ICE will attempt to reconnect
+      }
+    }
+
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state for', peerId, ':', pc.connectionState)
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        console.error('Peer connection failed/closed:', peerId)
+        if (peerConnections.current[peerId]) {
+          delete peerConnections.current[peerId]
         }
       }
     }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 
 function Controls({
   isHousemaster,
+  isAdmin,
   mode,
   selectedRoom,
   isTalking,
@@ -9,10 +10,15 @@ function Controls({
   onModeChange,
   onTalkToAll,
   onTalkToRoom,
-  onStopTalking
+  onStopTalking,
+  onAdminLogin,
+  onAdminLogout,
+  onKillAllAudio
 }) {
   const [isMobile, setIsMobile] = useState(false)
   const [tapMode, setTapMode] = useState(false)
+  const [showAdminPrompt, setShowAdminPrompt] = useState(false)
+  const [adminPassword, setAdminPassword] = useState('')
   const buttonRefs = useRef({})
 
   useEffect(() => {
@@ -64,6 +70,22 @@ function Controls({
     }
   }
 
+  const handleAdminPrompt = () => {
+    setShowAdminPrompt(true)
+  }
+
+  const handleAdminSubmit = (e) => {
+    e.preventDefault()
+    const success = onAdminLogin(adminPassword)
+    if (success) {
+      setShowAdminPrompt(false)
+      setAdminPassword('')
+    } else {
+      alert('Incorrect password')
+      setAdminPassword('')
+    }
+  }
+
   const getTalkToAllLabel = () => {
     if (isTalking === 'ALL') return '🔴 TALKING TO ALL'
     return 'TALK TO ALL'
@@ -77,33 +99,118 @@ function Controls({
 
   return (
     <div className="controls">
-      {isHousemaster && (
-        <div className="mode-controls">
+      {/* Admin Login Prompt */}
+      {showAdminPrompt && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <form onSubmit={handleAdminSubmit} style={{
+            background: 'var(--bg-panel)',
+            padding: '30px',
+            border: '2px solid var(--border-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '15px',
+            minWidth: '300px'
+          }}>
+            <h3>ADMIN LOGIN</h3>
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="submit">Login</button>
+              <button type="button" onClick={() => {
+                setShowAdminPrompt(false)
+                setAdminPassword('')
+              }}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Admin Panel */}
+      {isAdmin && isHousemaster && (
+        <div style={{
+          padding: '15px',
+          background: 'var(--bg-dark)',
+          border: '2px solid var(--housemaster)',
+          marginBottom: '15px',
+          borderRadius: '4px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h4 style={{ color: 'var(--housemaster)' }}>ADMIN PANEL</h4>
+            <button onClick={onAdminLogout} style={{ fontSize: '12px', padding: '6px 12px' }}>
+              Hide Admin
+            </button>
+          </div>
+
+          <div className="mode-controls" style={{ marginBottom: '15px' }}>
+            <button
+              onClick={() => onModeChange('announcement')}
+              style={{
+                background: mode === 'announcement' ? 'var(--button-active)' : ''
+              }}
+            >
+              Announcement
+            </button>
+            <button
+              onClick={() => onModeChange('returnChannel')}
+              style={{
+                background: mode === 'returnChannel' ? 'var(--button-active)' : ''
+              }}
+            >
+              Return Channel
+            </button>
+            <button
+              onClick={() => onModeChange('free')}
+              style={{
+                background: mode === 'free' ? 'var(--button-active)' : ''
+              }}
+            >
+              Free Mode
+            </button>
+          </div>
+
           <button
-            onClick={() => onModeChange('announcement')}
+            onClick={onKillAllAudio}
             style={{
-              background: mode === 'announcement' ? 'var(--button-active)' : ''
+              background: 'var(--warning)',
+              borderColor: 'var(--warning)',
+              color: '#000',
+              width: '100%',
+              fontWeight: 'bold'
             }}
           >
-            Announcement
-          </button>
-          <button
-            onClick={() => onModeChange('returnChannel')}
-            style={{
-              background: mode === 'returnChannel' ? 'var(--button-active)' : ''
-            }}
-          >
-            Return Channel
-          </button>
-          <button
-            onClick={() => onModeChange('free')}
-            style={{
-              background: mode === 'free' ? 'var(--button-active)' : ''
-            }}
-          >
-            Free Mode
+            ⚠️ KILL ALL AUDIO
           </button>
         </div>
+      )}
+
+      {/* Admin Login Button (only for housemaster) */}
+      {!isAdmin && isHousemaster && (
+        <button
+          onClick={handleAdminPrompt}
+          style={{
+            fontSize: '12px',
+            padding: '8px 16px',
+            marginBottom: '15px'
+          }}
+        >
+          Admin
+        </button>
       )}
 
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>

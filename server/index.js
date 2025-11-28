@@ -273,6 +273,33 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'killAllAudio': {
+      const connection = connections.get(ws)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(connection.roomName)
+      // Only housemaster can kill all audio
+      if (!room || !room.isHousemaster) {
+        sendToClient(ws, {
+          type: 'error',
+          message: 'Only Housemaster can kill all audio'
+        })
+        return
+      }
+
+      // Force stop all talking in the house
+      broadcastToHouse(connection.houseCode, {
+        type: 'forceStopTalking',
+        data: { reason: 'Admin killed all audio connections' }
+      })
+
+      console.log(`Housemaster ${connection.roomName} killed all audio in house ${connection.houseCode}`)
+      break
+    }
+
     case 'signal':
     case 'webrtc-signal': {
       // WebRTC signaling relay

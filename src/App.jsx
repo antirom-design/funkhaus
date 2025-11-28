@@ -17,6 +17,7 @@ function App() {
   const [talkingRoom, setTalkingRoom] = useState(null)
   const [isDemoMode, setIsDemoMode] = useState(false)
   const [roomAudioLevels, setRoomAudioLevels] = useState({})
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const {
     connected,
@@ -141,6 +142,25 @@ function App() {
     return false
   }
 
+  const handleAdminLogin = (password) => {
+    if (password === 'secret') {
+      setIsAdmin(true)
+      addSystemMessage('Admin mode activated')
+      return true
+    }
+    return false
+  }
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false)
+    addSystemMessage('Admin mode deactivated')
+  }
+
+  const handleKillAllAudio = () => {
+    sendMessage('killAllAudio', {})
+    addSystemMessage('Killed all audio connections')
+  }
+
   if (!joined) {
     return <JoinScreen onJoin={handleJoin} connected={connected} />
   }
@@ -150,6 +170,7 @@ function App() {
       houseCode={houseCode}
       roomName={roomName}
       isHousemaster={isHousemaster}
+      isAdmin={isAdmin}
       mode={mode}
       rooms={rooms}
       messages={messages}
@@ -166,6 +187,9 @@ function App() {
       onTalkToRoom={handleTalkToRoom}
       onStopTalking={handleStopTalking}
       onSendChat={handleSendChat}
+      onAdminLogin={handleAdminLogin}
+      onAdminLogout={handleAdminLogout}
+      onKillAllAudio={handleKillAllAudio}
     />
   )
 }

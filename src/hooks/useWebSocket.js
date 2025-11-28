@@ -107,6 +107,22 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
         // Handle WebRTC signaling
         window.dispatchEvent(new CustomEvent('webrtc-signal', { detail: message.data }))
         break
+      case 'forceStopTalking':
+        // Admin killed all audio
+        window.dispatchEvent(new CustomEvent('force-stop-talking', { detail: message.data }))
+        onChatMessage({
+          type: 'system',
+          text: `⚠️ ${message.data.reason}`,
+          timestamp: Date.now()
+        })
+        break
+      case 'error':
+        onChatMessage({
+          type: 'system',
+          text: `❌ Error: ${message.message}`,
+          timestamp: Date.now()
+        })
+        break
       default:
         console.log('Unknown message type:', message.type)
     }
