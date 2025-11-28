@@ -9,6 +9,12 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   const analyser = useRef(null)
   const animationFrame = useRef(null)
   const remoteAudios = useRef({})
+  const isTalkingRef = useRef(null)
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isTalkingRef.current = isTalking
+  }, [isTalking])
 
   useEffect(() => {
     // Listen for WebRTC signals
@@ -20,7 +26,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
     // Listen for force stop talking from admin
     const handleForceStop = (event) => {
       console.log('Force stop talking:', event.detail)
-      if (isTalking) {
+      if (isTalkingRef.current) {
         stopTalking()
       }
     }
@@ -33,7 +39,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       window.removeEventListener('force-stop-talking', handleForceStop)
       cleanup()
     }
-  }, [roomName, isTalking])
+  }, [roomName])
 
   const cleanup = () => {
     if (animationFrame.current) {
