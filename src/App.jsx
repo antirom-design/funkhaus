@@ -8,6 +8,7 @@ function App() {
   const [joined, setJoined] = useState(false)
   const [houseCode, setHouseCode] = useState('')
   const [roomName, setRoomName] = useState('')
+  const [autoJoinAttempted, setAutoJoinAttempted] = useState(false)
   const [isHousemaster, setIsHousemaster] = useState(false)
   const [mode, setMode] = useState('announcement') // announcement, returnChannel, free
   const [rooms, setRooms] = useState([])
@@ -69,6 +70,20 @@ function App() {
       timestamp: Date.now()
     }])
   }
+
+  // Check for URL parameters on mount
+  useEffect(() => {
+    if (!autoJoinAttempted && connected) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const house = urlParams.get('house')
+      const room = urlParams.get('room')
+
+      if (house && room) {
+        handleJoin(house, room)
+      }
+      setAutoJoinAttempted(true)
+    }
+  }, [connected, autoJoinAttempted])
 
   const handleJoin = (code, name) => {
     setHouseCode(code)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import RoomList from './RoomList'
 import ChatArea from './ChatArea'
 import Controls from './Controls'
+import RoomQRCode from './RoomQRCode'
 
 function MainScreen({
   houseCode,
@@ -74,6 +75,16 @@ function MainScreen({
 
         <div className="main-area">
           <ChatArea messages={messages} onSendChat={onSendChat} canTalkToAll={canTalkToAll} />
+        </div>
+
+        <div style={{
+          width: '280px',
+          padding: '20px',
+          background: 'var(--bg-panel)',
+          borderLeft: '2px solid var(--border)',
+          overflowY: 'auto'
+        }}>
+          <RoomQRCode houseCode={houseCode} roomName={roomName} />
         </div>
       </div>
 

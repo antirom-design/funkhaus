@@ -9,6 +9,7 @@
     "server": "node server/index.js"
   },
   "dependencies": {
+    "qrcode": "^1.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "ws": "^8.14.2"

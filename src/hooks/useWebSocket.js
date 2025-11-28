@@ -29,8 +29,8 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
   const connect = () => {
     connectionAttempts.current++
 
-    // After 2 failed attempts, switch to demo mode
-    if (connectionAttempts.current > 2) {
+    // After 5 failed attempts, switch to demo mode
+    if (connectionAttempts.current > 5) {
       console.log('Switching to DEMO mode - using mock WebSocket')
       setUseMockMode(true)
       setConnected(true)
@@ -39,16 +39,17 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
       setTimeout(() => {
         onChatMessage({
           type: 'system',
-          text: '🎭 DEMO MODE: Running without server. Deploy WebSocket server for full functionality.',
+          text: '🎭 DEMO MODE: Running without server. See DEPLOY_RAILWAY.md to enable real connections.',
           timestamp: Date.now()
         })
       }, 1000)
       return
     }
 
-    // Use production WebSocket URL or local development
+    // IMPORTANT: Replace with your Railway WebSocket URL after deployment!
+    // See DEPLOY_RAILWAY.md for instructions
     const wsUrl = import.meta.env.PROD
-      ? `wss://${window.location.host}/api/ws`
+      ? 'wss://YOUR-RAILWAY-URL.up.railway.app'  // ← CHANGE THIS AFTER DEPLOYING TO RAILWAY!
       : 'ws://localhost:3001'
 
     try {
