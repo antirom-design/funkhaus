@@ -14,6 +14,7 @@ function App() {
   const [messages, setMessages] = useState([])
   const [selectedRoom, setSelectedRoom] = useState(null)
   const [talkingRoom, setTalkingRoom] = useState(null)
+  const [isDemoMode, setIsDemoMode] = useState(false)
 
   const {
     connected,
@@ -41,6 +42,10 @@ function App() {
     },
     onChatMessage: (msg) => {
       setMessages(prev => [...prev, msg])
+      // Detect demo mode message
+      if (msg.text && msg.text.includes('DEMO MODE')) {
+        setIsDemoMode(true)
+      }
     },
     onTalkStateChange: (data) => {
       setTalkingRoom(data.talking ? data.roomName : null)
@@ -116,6 +121,7 @@ function App() {
       talkingRoom={talkingRoom}
       isTalking={isTalking}
       canTalkToAll={canTalkToAll()}
+      isDemoMode={isDemoMode}
       onModeChange={handleModeChange}
       onSelectRoom={setSelectedRoom}
       onTalkToAll={handleTalkToAll}

@@ -39,31 +39,29 @@ function JoinScreen({ onJoin, connected }) {
       <p className="info-text">
         {connected
           ? 'First to join becomes Housemaster'
-          : 'Connecting to server...'}
+          : 'Connecting to server... (Auto-switching to demo mode if unavailable)'}
       </p>
 
-      {!connected && (
-        <div style={{
-          maxWidth: '500px',
-          padding: '20px',
-          border: '2px solid var(--warning)',
-          borderRadius: '8px',
-          marginTop: '20px',
-          textAlign: 'left',
-          fontSize: '14px'
-        }}>
-          <h3 style={{ color: 'var(--warning)', marginBottom: '10px' }}>⚠️ Server Not Running</h3>
-          <p style={{ marginBottom: '10px' }}>The WebSocket server needs to be deployed separately.</p>
-          <p style={{ marginBottom: '10px' }}><strong>Quick Setup:</strong></p>
-          <ol style={{ marginLeft: '20px', marginBottom: '10px' }}>
-            <li>Go to <a href="https://railway.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)' }}>railway.app</a></li>
-            <li>Deploy the funkhaus GitHub repository</li>
-            <li>Get the WebSocket URL</li>
-            <li>Update src/hooks/useWebSocket.js</li>
-          </ol>
-          <p>See <a href="https://github.com/antirom-design/funkhaus#websocket-server" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)' }}>README</a> for detailed instructions.</p>
-        </div>
-      )}
+      <div style={{
+        maxWidth: '600px',
+        padding: '15px',
+        border: '2px solid var(--secondary)',
+        borderRadius: '8px',
+        marginTop: '20px',
+        textAlign: 'left',
+        fontSize: '14px',
+        background: 'rgba(6, 182, 212, 0.1)'
+      }}>
+        <h3 style={{ color: 'var(--secondary)', marginBottom: '10px' }}>ℹ️ Demo Mode Available</h3>
+        <p style={{ marginBottom: '10px' }}>App works in demo mode without server deployment. Demo includes simulated rooms and chat responses.</p>
+        <p style={{ marginBottom: '10px' }}><strong>For production use:</strong></p>
+        <ol style={{ marginLeft: '20px', marginBottom: '10px', fontSize: '13px' }}>
+          <li>Deploy WebSocket server to <a href="https://railway.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)' }}>Railway.app</a></li>
+          <li>Update server URL in code</li>
+          <li>Enables real multi-user WebRTC voice</li>
+        </ol>
+        <p style={{ fontSize: '12px' }}>See <a href="https://github.com/antirom-design/funkhaus#readme" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)' }}>README</a> for setup guide</p>
+      </div>
     </div>
   )
 }

@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMockWebSocket } from './useMockWebSocket'
 
 export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
   const [connected, setConnected] = useState(false)
+  const [useMockMode, setUseMockMode] = useState(false)
   const ws = useRef(null)
   const reconnectTimeout = useRef(null)
+  const connectionAttempts = useRef(0)
+
+  // Use mock WebSocket if real connection fails after 3 attempts
+  const mockWs = useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange })
 
   useEffect(() => {
-    connect()
+    if (!useMockMode) {
+      connect()
+    }
 
     return () => {
       if (reconnectTimeout.current) {
@@ -16,30 +24,56 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
         ws.current.close()
       }
     }
-  }, [])
+  }, [useMockMode])
 
   const connect = () => {
+    connectionAttempts.current++
+
+    // After 2 failed attempts, switch to demo mode
+    if (connectionAttempts.current > 2) {
+      console.log('Switching to DEMO mode - using mock WebSocket')
+      setUseMockMode(true)
+      setConnected(true)
+
+      // Show demo mode notification
+      setTimeout(() => {
+        onChatMessage({
+          type: 'system',
+          text: '🎭 DEMO MODE: Running without server. Deploy WebSocket server for full functionality.',
+          timestamp: Date.now()
+        })
+      }, 1000)
+      return
+    }
+
     // Use production WebSocket URL or local development
     const wsUrl = import.meta.env.PROD
       ? `wss://${window.location.host}/api/ws`
       : 'ws://localhost:3001'
 
-    ws.current = new WebSocket(wsUrl)
+    try {
+      ws.current = new WebSocket(wsUrl)
 
-    ws.current.onopen = () => {
-      console.log('WebSocket connected')
-      setConnected(true)
-    }
+      ws.current.onopen = () => {
+        console.log('WebSocket connected')
+        connectionAttempts.current = 0
+        setConnected(true)
+      }
 
-    ws.current.onclose = () => {
-      console.log('WebSocket disconnected')
+      ws.current.onclose = () => {
+        console.log('WebSocket disconnected')
+        setConnected(false)
+        // Attempt to reconnect after 2 seconds
+        reconnectTimeout.current = setTimeout(connect, 2000)
+      }
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error)
+      }
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error)
       setConnected(false)
-      // Attempt to reconnect after 3 seconds
-      reconnectTimeout.current = setTimeout(connect, 3000)
-    }
-
-    ws.current.onerror = (error) => {
-      console.error('WebSocket error:', error)
+      reconnectTimeout.current = setTimeout(connect, 2000)
     }
 
     ws.current.onmessage = (event) => {
@@ -94,6 +128,11 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
 
   const sendChatMessage = (text, target) => {
     sendMessage('chat', { text, target })
+  }
+
+  // Return mock WebSocket if in demo mode
+  if (useMockMode) {
+    return mockWs
   }
 
   return {

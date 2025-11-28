@@ -14,6 +14,7 @@ function MainScreen({
   talkingRoom,
   isTalking,
   canTalkToAll,
+  isDemoMode,
   onModeChange,
   onSelectRoom,
   onTalkToAll,
@@ -51,9 +52,9 @@ function MainScreen({
     <div className="main-screen">
       <div className="header">
         <div>
-          <h2>FUNKHAUS: {houseCode}</h2>
+          <h2>FUNKHAUS: {houseCode} {isDemoMode && '🎭'}</h2>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Room: {roomName} {isHousemaster && '(HOUSEMASTER)'}
+            Room: {roomName} {isHousemaster && '(HOUSEMASTER)'} {isDemoMode && '• DEMO MODE'}
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>
