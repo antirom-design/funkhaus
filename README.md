@@ -11,7 +11,7 @@ A retro-styled web application that recreates an old-school push-to-talk room in
 - **Mock chat responses** for interactive demo
 - **All features** work except real multi-user WebRTC voice
 
-**Try it now**: https://funkhaus-5hxqd6xaw-antiroms-projects.vercel.app
+**Try it now**: https://funkhaus.vercel.app
 
 For production use with real multi-user voice, deploy the WebSocket server (see Deployment section).
 
@@ -65,7 +65,7 @@ funkhaus/
 
 ### Try Demo Mode (No Setup Required)
 
-1. **Just visit**: https://funkhaus-5hxqd6xaw-antiroms-projects.vercel.app
+1. **Just visit**: https://funkhaus.vercel.app
 2. **Enter** a house code and room name
 3. **Explore** all features in demo mode!
 
