@@ -46,10 +46,9 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
       return
     }
 
-    // IMPORTANT: Replace with your Railway WebSocket URL after deployment!
-    // See DEPLOY_RAILWAY.md for instructions
+    // WebSocket server deployed on Render.com
     const wsUrl = import.meta.env.PROD
-      ? 'wss://YOUR-RAILWAY-URL.up.railway.app'  // ← CHANGE THIS AFTER DEPLOYING TO RAILWAY!
+      ? 'wss://funkhaus-websocket.onrender.com'
       : 'ws://localhost:3001'
 
     try {
