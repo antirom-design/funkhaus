@@ -1,3 +1,5 @@
+import { useState, useEffect, useRef } from 'react'
+
 function Controls({
   isHousemaster,
   mode,
@@ -9,14 +11,55 @@ function Controls({
   onTalkToRoom,
   onStopTalking
 }) {
+  const [isMobile, setIsMobile] = useState(false)
+  const [tapMode, setTapMode] = useState(false)
+  const buttonRefs = useRef({})
+
+  useEffect(() => {
+    // Detect mobile device
+    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
+    setIsMobile(mobile)
+    setTapMode(mobile)
+  }, [])
+
   const handleMouseDown = (action) => {
-    if (!isTalking) {
+    if (!isTalking && !tapMode) {
       action()
     }
   }
 
   const handleMouseUp = () => {
-    if (isTalking) {
+    if (isTalking && !tapMode) {
+      onStopTalking()
+    }
+  }
+
+  const handleTouchStart = (e, action) => {
+    e.preventDefault()
+    if (tapMode) {
+      // Tap mode: toggle on/off
+      if (isTalking) {
+        onStopTalking()
+      } else {
+        action()
+      }
+    } else {
+      // Hold mode
+      if (!isTalking) {
+        action()
+      }
+    }
+  }
+
+  const handleTouchEnd = (e) => {
+    if (!tapMode && isTalking) {
+      onStopTalking()
+    }
+  }
+
+  const handleTouchCancel = (e) => {
+    // Always stop when touch is cancelled (finger left button)
+    if (isTalking && !tapMode) {
       onStopTalking()
     }
   }
@@ -63,15 +106,16 @@ function Controls({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '20px' }}>
+      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
         <button
           className={`talk-button all ${isTalking === 'ALL' ? 'active' : ''}`}
           disabled={!canTalkToAll}
           onMouseDown={() => handleMouseDown(onTalkToAll)}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onTouchStart={() => handleMouseDown(onTalkToAll)}
-          onTouchEnd={handleMouseUp}
+          onTouchStart={(e) => handleTouchStart(e, onTalkToAll)}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
         >
           {getTalkToAllLabel()}
         </button>
@@ -82,14 +126,26 @@ function Controls({
           onMouseDown={() => handleMouseDown(() => onTalkToRoom(selectedRoom))}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onTouchStart={() => handleMouseDown(() => onTalkToRoom(selectedRoom))}
-          onTouchEnd={handleMouseUp}
+          onTouchStart={(e) => handleTouchStart(e, () => onTalkToRoom(selectedRoom))}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
         >
           {getTalkToRoomLabel()}
         </button>
       </div>
 
-      <p className="info-text">Hold button to talk • Release to stop</p>
+      {tapMode && (
+        <button
+          onClick={() => setTapMode(false)}
+          style={{ fontSize: '12px', padding: '8px 16px' }}
+        >
+          Switch to Hold Mode
+        </button>
+      )}
+
+      <p className="info-text">
+        {tapMode ? 'Tap to start • Tap again to stop' : 'Hold button to talk • Release to stop'}
+      </p>
     </div>
   )
 }
