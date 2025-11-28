@@ -15,6 +15,7 @@ function MainScreen({
   selectedRoom,
   talkingRoom,
   isTalking,
+  isConnected,
   canTalkToAll,
   isDemoMode,
   audioLevel,
@@ -103,6 +104,7 @@ function MainScreen({
         mode={mode}
         selectedRoom={selectedRoom}
         isTalking={isTalking}
+        isConnected={isConnected}
         canTalkToAll={canTalkToAll}
         viewMode={viewMode}
         onModeChange={onModeChange}

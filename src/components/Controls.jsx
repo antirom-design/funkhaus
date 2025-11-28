@@ -6,6 +6,7 @@ function Controls({
   mode,
   selectedRoom,
   isTalking,
+  isConnected,
   canTalkToAll,
   viewMode,
   onModeChange,
@@ -19,6 +20,9 @@ function Controls({
   const [tapMode, setTapMode] = useState(viewMode === 'mobile')
   const [showAdminPrompt, setShowAdminPrompt] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
+  const [sliderPosition, setSliderPosition] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const sliderRef = useRef(null)
   const buttonRefs = useRef({})
 
   useEffect(() => {
@@ -83,6 +87,59 @@ function Controls({
       setAdminPassword('')
     }
   }
+
+  // Slider handlers for mobile
+  const handleSliderStart = (e) => {
+    setIsDragging(true)
+  }
+
+  const handleSliderMove = (e) => {
+    if (!isDragging) return
+
+    const slider = sliderRef.current
+    if (!slider) return
+
+    const rect = slider.getBoundingClientRect()
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX
+    const position = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100))
+
+    setSliderPosition(position)
+
+    // Activate talk when slider > 80%
+    if (position > 80 && !isTalking) {
+      onTalkToAll()
+    } else if (position <= 80 && isTalking) {
+      onStopTalking()
+    }
+  }
+
+  const handleSliderEnd = () => {
+    setIsDragging(false)
+    // Reset slider and stop talking
+    setSliderPosition(0)
+    if (isTalking) {
+      onStopTalking()
+    }
+  }
+
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMove = (e) => handleSliderMove(e)
+      const handleGlobalEnd = () => handleSliderEnd()
+
+      window.addEventListener('mousemove', handleGlobalMove)
+      window.addEventListener('mouseup', handleGlobalEnd)
+      window.addEventListener('touchmove', handleGlobalMove)
+      window.addEventListener('touchend', handleGlobalEnd)
+
+      return () => {
+        window.removeEventListener('mousemove', handleGlobalMove)
+        window.removeEventListener('mouseup', handleGlobalEnd)
+        window.removeEventListener('touchmove', handleGlobalMove)
+        window.removeEventListener('touchend', handleGlobalEnd)
+      }
+    }
+  }, [isDragging, isTalking])
 
   const getTalkToAllLabel = () => {
     if (isTalking === 'ALL') return '🔴 TALKING TO ALL'
@@ -211,46 +268,116 @@ function Controls({
         </button>
       )}
 
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
-        <button
-          className={`talk-button all ${isTalking === 'ALL' ? 'active' : ''}`}
-          disabled={!canTalkToAll}
-          onMouseDown={() => handleMouseDown(onTalkToAll)}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onTouchStart={(e) => handleTouchStart(e, onTalkToAll)}
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchCancel}
-        >
-          {getTalkToAllLabel()}
-        </button>
+      {viewMode === 'mobile' ? (
+        /* Mobile Slider Control */
+        <div style={{ width: '100%', padding: '20px 0' }}>
+          <div style={{ marginBottom: '15px', textAlign: 'center' }}>
+            <p style={{
+              color: !isConnected && isTalking === null ? 'var(--warning)' : 'var(--text-primary)',
+              fontSize: '14px',
+              marginBottom: '5px'
+            }}>
+              {!isConnected && isTalking === null ? '⚠️ Connecting...' : isTalking ? '🔴 TALKING' : 'Slide right to talk →'}
+            </p>
+          </div>
 
-        <button
-          className={`talk-button ${isTalking === selectedRoom ? 'active' : ''}`}
-          disabled={!selectedRoom}
-          onMouseDown={() => handleMouseDown(() => onTalkToRoom(selectedRoom))}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onTouchStart={(e) => handleTouchStart(e, () => onTalkToRoom(selectedRoom))}
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchCancel}
-        >
-          {getTalkToRoomLabel()}
-        </button>
-      </div>
+          <div
+            ref={sliderRef}
+            onMouseDown={handleSliderStart}
+            onTouchStart={handleSliderStart}
+            style={{
+              position: 'relative',
+              height: '60px',
+              background: 'var(--bg-panel)',
+              border: '2px solid var(--border-color)',
+              borderRadius: '30px',
+              cursor: 'pointer',
+              touchAction: 'none',
+              userSelect: 'none'
+            }}
+          >
+            {/* Track fill */}
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${sliderPosition}%`,
+              background: sliderPosition > 80 ? 'var(--button-active)' : 'rgba(0, 255, 0, 0.2)',
+              borderRadius: '28px',
+              transition: isDragging ? 'none' : 'width 0.2s ease-out'
+            }} />
 
-      {viewMode === 'mobile' && tapMode && (
-        <button
-          onClick={() => setTapMode(false)}
-          style={{ fontSize: '12px', padding: '8px 16px' }}
-        >
-          Switch to Hold Mode
-        </button>
+            {/* Slider handle */}
+            <div style={{
+              position: 'absolute',
+              left: `${sliderPosition}%`,
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '56px',
+              height: '56px',
+              background: sliderPosition > 80 ? 'var(--button-active)' : 'var(--text-primary)',
+              borderRadius: '50%',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              transition: isDragging ? 'none' : 'left 0.2s ease-out'
+            }}>
+              {sliderPosition > 80 ? '🔴' : '🎤'}
+            </div>
+
+            {/* Text hint */}
+            <div style={{
+              position: 'absolute',
+              right: '20px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-secondary)',
+              fontSize: '12px',
+              pointerEvents: 'none'
+            }}>
+              HOLD →
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Desktop Button Control */
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
+          <button
+            className={`talk-button all ${isTalking === 'ALL' ? 'active' : ''}`}
+            disabled={!canTalkToAll || (!isConnected && isTalking === null)}
+            onMouseDown={() => handleMouseDown(onTalkToAll)}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onTouchStart={(e) => handleTouchStart(e, onTalkToAll)}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
+          >
+            {!isConnected && isTalking === null ? 'Connecting...' : getTalkToAllLabel()}
+          </button>
+
+          <button
+            className={`talk-button ${isTalking === selectedRoom ? 'active' : ''}`}
+            disabled={!selectedRoom || (!isConnected && isTalking === null)}
+            onMouseDown={() => handleMouseDown(() => onTalkToRoom(selectedRoom))}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onTouchStart={(e) => handleTouchStart(e, () => onTalkToRoom(selectedRoom))}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
+          >
+            {!isConnected && isTalking === null ? 'Connecting...' : getTalkToRoomLabel()}
+          </button>
+        </div>
       )}
 
-      <p className="info-text">
-        {tapMode ? 'Tap to start • Tap again to stop' : 'Hold button to talk • Release to stop'}
-      </p>
+      {viewMode === 'desktop' && (
+        <p className="info-text">
+          Hold button to talk • Release to stop
+        </p>
+      )}
     </div>
   )
 }

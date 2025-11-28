@@ -3,6 +3,7 @@ import { useRef, useState, useEffect, useCallback } from 'react'
 export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   const [isTalking, setIsTalking] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
+  const [isConnected, setIsConnected] = useState(false)
   const localStream = useRef(null)
   const peerConnections = useRef({})
   const audioContext = useRef(null)
@@ -10,6 +11,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   const animationFrame = useRef(null)
   const remoteAudios = useRef({})
   const isTalkingRef = useRef(null)
+  const activeSenders = useRef({})
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -151,14 +153,26 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       cancelAnimationFrame(animationFrame.current)
     }
 
+    // Remove tracks from peer connections (but keep connections alive)
+    Object.entries(activeSenders.current).forEach(([peerId, senders]) => {
+      senders.forEach(sender => {
+        const pc = peerConnections.current[peerId]
+        if (pc) {
+          try {
+            pc.removeTrack(sender)
+            console.log('Removed track from:', peerId)
+          } catch (e) {
+            console.log('Error removing track:', e)
+          }
+        }
+      })
+    })
+    activeSenders.current = {}
+
     if (localStream.current) {
       localStream.current.getTracks().forEach(track => track.stop())
       localStream.current = null
     }
-
-    // Close all peer connections
-    Object.values(peerConnections.current).forEach(pc => pc.close())
-    peerConnections.current = {}
 
     // Notify server
     sendSignal('stopTalk', { roomName, houseCode })
@@ -181,6 +195,19 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
         console.log('Creating offers for rooms:', signal.targets)
         for (const targetRoom of signal.targets) {
           const pc = await createPeerConnection(targetRoom)
+
+          // If connection already exists, add tracks and renegotiate
+          if (peerConnections.current[targetRoom] && localStream.current && !activeSenders.current[targetRoom]) {
+            console.log('Reusing existing connection, adding tracks to:', targetRoom)
+            const senders = []
+            localStream.current.getTracks().forEach(track => {
+              const sender = pc.addTrack(track, localStream.current)
+              senders.push(sender)
+              console.log('Re-added track:', track.kind)
+            })
+            activeSenders.current[targetRoom] = senders
+          }
+
           const offer = await pc.createOffer()
           await pc.setLocalDescription(offer)
 
@@ -192,6 +219,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
           })
           console.log('Sent offer to:', targetRoom)
         }
+        setIsConnected(true)
       } else if (signal.type === 'offer') {
         console.log('Creating answer for offer from:', from)
         const pc = await createPeerConnection(from)
@@ -243,10 +271,16 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
     // Add local stream tracks if we're talking
     if (localStream.current) {
       console.log('Adding local stream tracks to peer connection')
+      const senders = []
       localStream.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStream.current)
+        const sender = pc.addTrack(track, localStream.current)
+        senders.push(sender)
         console.log('Added track:', track.kind)
       })
+      // Store senders for later removal
+      if (senders.length > 0) {
+        activeSenders.current[peerId] = senders
+      }
     }
 
     // Handle incoming audio stream
@@ -352,6 +386,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   return {
     isTalking,
     audioLevel,
+    isConnected,
     startTalking,
     stopTalking
   }
