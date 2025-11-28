@@ -2,6 +2,19 @@
 
 A retro-styled web application that recreates an old-school push-to-talk room intercom system with voice (WebRTC) and chat capabilities.
 
+## 🎭 Demo Mode - Works Immediately!
+
+**The app now includes a built-in demo mode** that works without any server deployment!
+
+- **Auto-activates** when WebSocket server is unavailable
+- **Simulated rooms** join automatically for realistic testing
+- **Mock chat responses** for interactive demo
+- **All features** work except real multi-user WebRTC voice
+
+**Try it now**: https://funkhaus-5hxqd6xaw-antiroms-projects.vercel.app
+
+For production use with real multi-user voice, deploy the WebSocket server (see Deployment section).
+
 ## Features
 
 - **Multi-Room Communication**: Each browser session becomes a "room" in a shared "house"
@@ -48,12 +61,13 @@ funkhaus/
 └── vercel.json
 ```
 
-## Installation
+## Quick Start
 
-### Prerequisites
+### Try Demo Mode (No Setup Required)
 
-- Node.js 18+ (for local development and server)
-- Modern browser with WebRTC support
+1. **Just visit**: https://funkhaus-5hxqd6xaw-antiroms-projects.vercel.app
+2. **Enter** a house code and room name
+3. **Explore** all features in demo mode!
 
 ### Local Development
 
@@ -62,17 +76,17 @@ funkhaus/
    npm install
    ```
 
-2. **Start the WebSocket server** (in one terminal):
+2. **Start the frontend:**
+   ```bash
+   npm run dev
+   ```
+   Frontend runs on `http://localhost:3000` (demo mode auto-activates)
+
+3. **Optional - Start WebSocket server** (for real multi-user):
    ```bash
    npm run server
    ```
    Server runs on `http://localhost:3001`
-
-3. **Start the frontend** (in another terminal):
-   ```bash
-   npm run dev
-   ```
-   Frontend runs on `http://localhost:3000`
 
 4. **Open multiple browser tabs** to test multi-room communication
 
