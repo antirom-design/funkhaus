@@ -3,10 +3,10 @@ import { createServer } from 'http'
 
 const PORT = process.env.PORT || 3001
 
-// Store houses and their rooms
+// Store houses with rooms and users
 const houses = new Map()
 
-// Store WebSocket connections by room
+// Store WebSocket connections
 const connections = new Map()
 
 function getHouse(houseCode) {
@@ -14,6 +14,7 @@ function getHouse(houseCode) {
     houses.set(houseCode, {
       code: houseCode,
       rooms: new Map(),
+      users: new Map(),
       mode: 'announcement',
       housemaster: null
     })
@@ -21,58 +22,134 @@ function getHouse(houseCode) {
   return houses.get(houseCode)
 }
 
-function addRoom(houseCode, roomName, ws) {
-  const house = getHouse(houseCode)
-
-  // First room becomes housemaster
-  const isHousemaster = house.rooms.size === 0
-  if (isHousemaster) {
-    house.housemaster = roomName
-  }
-
-  const room = {
-    id: `${houseCode}-${roomName}-${Date.now()}`,
-    name: roomName,
-    houseCode,
-    isHousemaster,
-    ws
-  }
-
-  house.rooms.set(roomName, room)
-  connections.set(ws, { houseCode, roomName })
-
-  return { room, house, isHousemaster }
+function getRoomsList(house) {
+  const rooms = []
+  house.rooms.forEach((room, roomName) => {
+    rooms.push({
+      name: roomName,
+      occupancy: room.users.size,
+      users: Array.from(room.users),
+      permanent: room.permanent || false
+    })
+  })
+  return rooms
 }
 
-function removeRoom(ws) {
+function getUsersList(house) {
+  const users = []
+  house.users.forEach((user, userId) => {
+    users.push({
+      id: userId,
+      name: user.name,
+      currentRoom: user.currentRoom,
+      isHousemaster: user.isHousemaster
+    })
+  })
+  return users
+}
+
+function joinHouse(houseCode, userName, ws) {
+  const house = getHouse(houseCode)
+  const userId = `${userName}-${Date.now()}`
+
+  // First user becomes housemaster
+  const isHousemaster = house.users.size === 0
+  if (isHousemaster) {
+    house.housemaster = userId
+  }
+
+  // Add user to house
+  house.users.set(userId, {
+    id: userId,
+    name: userName,
+    currentRoom: null,
+    ws,
+    isHousemaster
+  })
+
+  connections.set(ws, { houseCode, userId })
+
+  return { userId, isHousemaster, house }
+}
+
+function joinRoom(houseCode, userId, roomName) {
+  const house = houses.get(houseCode)
+  if (!house) return null
+
+  const user = house.users.get(userId)
+  if (!user) return null
+
+  // Leave current room if in one
+  if (user.currentRoom) {
+    const currentRoom = house.rooms.get(user.currentRoom)
+    if (currentRoom) {
+      currentRoom.users.delete(userId)
+      // Delete empty non-permanent rooms
+      if (currentRoom.users.size === 0 && !currentRoom.permanent) {
+        house.rooms.delete(user.currentRoom)
+      }
+    }
+  }
+
+  // Create room if it doesn't exist
+  if (!house.rooms.has(roomName)) {
+    house.rooms.set(roomName, {
+      name: roomName,
+      users: new Set(),
+      permanent: false
+    })
+  }
+
+  // Join new room
+  const room = house.rooms.get(roomName)
+  room.users.add(userId)
+  user.currentRoom = roomName
+
+  return { room, user }
+}
+
+function leaveHouse(ws) {
   const connection = connections.get(ws)
   if (!connection) return
 
-  const { houseCode, roomName } = connection
+  const { houseCode, userId } = connection
   const house = houses.get(houseCode)
 
   if (house) {
-    house.rooms.delete(roomName)
+    const user = house.users.get(userId)
 
-    // If housemaster left, assign new one
-    if (house.housemaster === roomName && house.rooms.size > 0) {
-      const newHousemaster = Array.from(house.rooms.values())[0]
-      house.housemaster = newHousemaster.name
+    // Remove from current room
+    if (user && user.currentRoom) {
+      const room = house.rooms.get(user.currentRoom)
+      if (room) {
+        room.users.delete(userId)
+        if (room.users.size === 0 && !room.permanent) {
+          house.rooms.delete(user.currentRoom)
+        }
+      }
+    }
+
+    // Remove user
+    house.users.delete(userId)
+
+    // Reassign housemaster if needed
+    if (house.housemaster === userId && house.users.size > 0) {
+      const newHousemaster = Array.from(house.users.values())[0]
+      house.housemaster = newHousemaster.id
       newHousemaster.isHousemaster = true
 
-      // Notify new housemaster
       sendToClient(newHousemaster.ws, {
-        type: 'system',
-        message: 'You are now the Housemaster!'
+        type: 'housemaster',
+        data: { isHousemaster: true }
       })
     }
 
     // Clean up empty houses
-    if (house.rooms.size === 0) {
+    if (house.users.size === 0) {
       houses.delete(houseCode)
     } else {
       broadcastToHouse(houseCode, {
-        type: 'rooms',
+        type: 'roomsUpdate',
         data: getRoomsList(house)
       })
     }
@@ -81,16 +158,8 @@ function removeRoom(ws) {
   connections.delete(ws)
 }
 
-function getRoomsList(house) {
-  return Array.from(house.rooms.values()).map(room => ({
-    id: room.id,
-    name: room.name,
-    isHousemaster: room.isHousemaster
-  }))
-}
-
 function sendToClient(ws, message) {
-  if (ws.readyState === 1) { // WebSocket.OPEN
+  if (ws.readyState === 1) {
     ws.send(JSON.stringify(message))
   }
 }
@@ -99,27 +168,42 @@ function broadcastToHouse(houseCode, message, excludeWs = null) {
   const house = houses.get(houseCode)
   if (!house) return
 
-  house.rooms.forEach(room => {
-    if (room.ws !== excludeWs) {
-      sendToClient(room.ws, message)
+  house.users.forEach(user => {
+    if (user.ws !== excludeWs) {
+      sendToClient(user.ws, message)
     }
   })
 }
 
-function sendToRoom(houseCode, targetRoom, message) {
+function broadcastToRoom(houseCode, roomName, message, excludeWs = null) {
   const house = houses.get(houseCode)
   if (!house) return
 
-  const room = house.rooms.get(targetRoom)
-  if (room) {
-    sendToClient(room.ws, message)
+  const room = house.rooms.get(roomName)
+  if (!room) return
+
+  room.users.forEach(userId => {
+    const user = house.users.get(userId)
+    if (user && user.ws !== excludeWs) {
+      sendToClient(user.ws, message)
+    }
+  })
+}
+
+function sendToUser(houseCode, targetUserId, message) {
+  const house = houses.get(houseCode)
+  if (!house) return
+
+  const user = house.users.get(targetUserId)
+  if (user) {
+    sendToClient(user.ws, message)
   }
 }
 
 // Create HTTP server
 const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' })
-  res.end('FunkHaus WebSocket Server')
+  res.end('FunkHaus WebSocket Server v1.1')
 })
 
 // Create WebSocket server
@@ -139,7 +223,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('WebSocket disconnected')
-    removeRoom(ws)
+    leaveHouse(ws)
   })
 
   ws.on('error', (error) => {
@@ -151,27 +235,82 @@ function handleMessage(ws, message) {
   const { type, data } = message
 
   switch (type) {
-    case 'join': {
-      const { houseCode, roomName } = data
-      const { room, house, isHousemaster } = addRoom(houseCode, roomName, ws)
+    case 'joinHouse': {
+      const { houseCode, userName } = data
+      const { userId, isHousemaster, house } = joinHouse(houseCode, userName, ws)
 
       // Send join confirmation
       sendToClient(ws, {
-        type: 'joined',
+        type: 'houseJoined',
         data: {
+          userId,
           isHousemaster,
           mode: house.mode,
           rooms: getRoomsList(house)
         }
       })
 
-      // Broadcast updated room list
-      broadcastToHouse(houseCode, {
-        type: 'rooms',
-        data: getRoomsList(house)
-      })
+      console.log(`${userName} joined house ${houseCode}`)
+      break
+    }
 
-      console.log(`${roomName} joined house ${houseCode}`)
+    case 'joinRoom': {
+      const connection = connections.get(ws)
+      if (!connection) return
+
+      const { roomName } = data
+      const result = joinRoom(connection.houseCode, connection.userId, roomName)
+
+      if (result) {
+        const house = houses.get(connection.houseCode)
+
+        // Confirm room join
+        sendToClient(ws, {
+          type: 'roomJoined',
+          data: {
+            roomName,
+            userId: connection.userId
+          }
+        })
+
+        // Broadcast updated room list
+        broadcastToHouse(connection.houseCode, {
+          type: 'roomsUpdate',
+          data: getRoomsList(house)
+        })
+
+        console.log(`User ${connection.userId} joined room ${roomName}`)
+      }
+      break
+    }
+
+    case 'createRoom': {
+      const connection = connections.get(ws)
+      if (!connection) return
+
+      const { roomName, permanent } = data
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Only housemaster can create permanent rooms
+      const user = house.users.get(connection.userId)
+      const canCreatePermanent = user && user.isHousemaster
+
+      if (!house.rooms.has(roomName)) {
+        house.rooms.set(roomName, {
+          name: roomName,
+          users: new Set(),
+          permanent: permanent && canCreatePermanent
+        })
+
+        // Broadcast updated room list
+        broadcastToHouse(connection.houseCode, {
+          type: 'roomsUpdate',
+          data: getRoomsList(house)
+        })
+
+        console.log(`Room ${roomName} created in house ${connection.houseCode}`)
+      }
       break
     }
 
@@ -182,8 +321,8 @@ function handleMessage(ws, message) {
       const house = houses.get(connection.houseCode)
       if (!house) return
 
-      const room = house.rooms.get(connection.roomName)
-      if (!room || !room.isHousemaster) {
+      const user = house.users.get(connection.userId)
+      if (!user || !user.isHousemaster) {
         sendToClient(ws, {
           type: 'error',
           message: 'Only Housemaster can change mode'
@@ -206,10 +345,14 @@ function handleMessage(ws, message) {
       if (!connection) return
 
       const { text, target } = data
+      const house = houses.get(connection.houseCode)
+      const user = house.users.get(connection.userId)
+
       const chatMessage = {
         type: 'chat',
         data: {
-          sender: connection.roomName,
+          sender: user.name,
+          senderId: connection.userId,
           target: target,
           text: text,
           timestamp: Date.now()
@@ -218,10 +361,12 @@ function handleMessage(ws, message) {
 
       if (target === 'ALL') {
         broadcastToHouse(connection.houseCode, chatMessage)
+      } else if (target.startsWith('room:')) {
+        const roomName = target.substring(5)
+        broadcastToRoom(connection.houseCode, roomName, chatMessage)
       } else {
-        // Send to specific room
-        sendToRoom(connection.houseCode, target, chatMessage)
-        // Also send to sender
+        // Direct message to user
+        sendToUser(connection.houseCode, target, chatMessage)
         sendToClient(ws, chatMessage)
       }
       break
@@ -233,27 +378,36 @@ function handleMessage(ws, message) {
 
       const { target } = data
       const house = houses.get(connection.houseCode)
+      const user = house.users.get(connection.userId)
 
-      // Broadcast that this room is talking
+      // Broadcast that this user is talking
       broadcastToHouse(connection.houseCode, {
         type: 'talkState',
         data: {
           talking: true,
-          roomName: connection.roomName,
+          userId: connection.userId,
+          userName: user.name,
           target: target
         }
       })
 
-      // Send list of target rooms back to talker so they can create offers
-      const targetRooms = target === 'ALL'
-        ? Array.from(house.rooms.keys()).filter(r => r !== connection.roomName)
-        : [target]
+      // Send list of target users for WebRTC connections
+      let targetUsers = []
+      if (target === 'ALL') {
+        targetUsers = Array.from(house.users.keys()).filter(id => id !== connection.userId)
+      } else if (target.startsWith('room:')) {
+        const roomName = target.substring(5)
+        const room = house.rooms.get(roomName)
+        if (room) {
+          targetUsers = Array.from(room.users).filter(id => id !== connection.userId)
+        }
+      }
 
       sendToClient(ws, {
         type: 'signal',
         data: {
-          signal: { type: 'start-offers', targets: targetRooms },
-          target: connection.roomName
+          signal: { type: 'start-offers', targets: targetUsers },
+          target: connection.userId
         }
       })
       break
@@ -263,11 +417,15 @@ function handleMessage(ws, message) {
       const connection = connections.get(ws)
       if (!connection) return
 
+      const house = houses.get(connection.houseCode)
+      const user = house.users.get(connection.userId)
+
       broadcastToHouse(connection.houseCode, {
         type: 'talkState',
         data: {
           talking: false,
-          roomName: connection.roomName
+          userId: connection.userId,
+          userName: user.name
         }
       })
       break
@@ -280,9 +438,8 @@ function handleMessage(ws, message) {
       const house = houses.get(connection.houseCode)
       if (!house) return
 
-      const room = house.rooms.get(connection.roomName)
-      // Only housemaster can kill all audio
-      if (!room || !room.isHousemaster) {
+      const user = house.users.get(connection.userId)
+      if (!user || !user.isHousemaster) {
         sendToClient(ws, {
           type: 'error',
           message: 'Only Housemaster can kill all audio'
@@ -290,44 +447,53 @@ function handleMessage(ws, message) {
         return
       }
 
-      // Force stop all talking in the house
       broadcastToHouse(connection.houseCode, {
         type: 'forceStopTalking',
         data: { reason: 'Admin killed all audio connections' }
       })
 
-      console.log(`Housemaster ${connection.roomName} killed all audio in house ${connection.houseCode}`)
+      console.log(`Housemaster killed all audio in house ${connection.houseCode}`)
       break
     }
 
     case 'signal':
     case 'webrtc-signal': {
-      // WebRTC signaling relay
       const connection = connections.get(ws)
       if (!connection) return
 
       const { to, signal, target } = data
+      const house = houses.get(connection.houseCode)
+      const user = house.users.get(connection.userId)
 
       if (to === 'ALL' || target === 'ALL') {
-        // Broadcast signal to all rooms except sender
-        broadcastToHouse(connection.houseCode, {
-          type: 'signal',
-          data: {
-            from: connection.roomName,
-            signal,
-            target: 'ALL'
-          }
-        }, ws)
-      } else {
-        // Send to specific room
-        sendToRoom(connection.houseCode, to, {
-          type: 'signal',
-          data: {
-            from: connection.roomName,
-            signal,
-            target: to
+        // Broadcast to all users except sender
+        house.users.forEach((targetUser, targetId) => {
+          if (targetId !== connection.userId) {
+            sendToClient(targetUser.ws, {
+              type: 'signal',
+              data: {
+                from: connection.userId,
+                fromName: user.name,
+                signal,
+                target: targetId
+              }
+            })
           }
         })
+      } else {
+        // Send to specific user
+        const targetUser = house.users.get(to)
+        if (targetUser) {
+          sendToClient(targetUser.ws, {
+            type: 'signal',
+            data: {
+              from: connection.userId,
+              fromName: user.name,
+              signal,
+              target: to
+            }
+          })
+        }
       }
       break
     }
@@ -338,5 +504,5 @@ function handleMessage(ws, message) {
 }
 
 server.listen(PORT, () => {
-  console.log(`FunkHaus server running on port ${PORT}`)
+  console.log(`FunkHaus server v1.1 running on port ${PORT}`)
 })

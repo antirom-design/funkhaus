@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMockWebSocket } from './useMockWebSocket'
 
-export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
+export function useWebSocket({ onHouseJoined, onRoomJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
   const [connected, setConnected] = useState(false)
   const [useMockMode, setUseMockMode] = useState(false)
   const ws = useRef(null)
@@ -9,7 +9,7 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
   const connectionAttempts = useRef(0)
 
   // Use mock WebSocket if real connection fails after 3 attempts
-  const mockWs = useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange })
+  const mockWs = useMockWebSocket({ onHouseJoined, onRoomJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange })
 
   useEffect(() => {
     if (!useMockMode) {
@@ -88,10 +88,13 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
 
   const handleMessage = (message) => {
     switch (message.type) {
-      case 'joined':
-        onJoined(message.data)
+      case 'houseJoined':
+        onHouseJoined(message.data)
         break
-      case 'rooms':
+      case 'roomJoined':
+        onRoomJoined(message.data)
+        break
+      case 'roomsUpdate':
         onRoomsUpdate(message.data)
         break
       case 'modeChange':
@@ -134,8 +137,16 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
     }
   }
 
-  const joinHouse = (houseCode, roomName) => {
-    sendMessage('join', { houseCode, roomName })
+  const joinHouse = (houseCode, userName) => {
+    sendMessage('joinHouse', { houseCode, userName })
+  }
+
+  const joinRoom = (roomName) => {
+    sendMessage('joinRoom', { roomName })
+  }
+
+  const createRoom = (roomName, permanent = false) => {
+    sendMessage('createRoom', { roomName, permanent })
   }
 
   const changeMode = (mode) => {
@@ -155,6 +166,8 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
     connected,
     sendMessage,
     joinHouse,
+    joinRoom,
+    createRoom,
     changeMode,
     sendChatMessage
   }

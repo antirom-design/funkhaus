@@ -3,14 +3,14 @@ import QRCode from 'qrcode'
 
 function RoomQRCode({ houseCode, roomName }) {
   const canvasRef = useRef(null)
-  const [roomUrl, setRoomUrl] = useState('')
+  const [houseUrl, setHouseUrl] = useState('')
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    // Generate room-specific URL
+    // Generate house URL (user will select room after joining)
     const baseUrl = window.location.origin
-    const url = `${baseUrl}?house=${encodeURIComponent(houseCode)}&room=${encodeURIComponent(roomName)}`
-    setRoomUrl(url)
+    const url = `${baseUrl}?house=${encodeURIComponent(houseCode)}`
+    setHouseUrl(url)
 
     // Generate QR code
     if (canvasRef.current) {
@@ -25,10 +25,10 @@ function RoomQRCode({ houseCode, roomName }) {
         if (error) console.error('QR Code generation error:', error)
       })
     }
-  }, [houseCode, roomName])
+  }, [houseCode])
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(roomUrl).then(() => {
+    navigator.clipboard.writeText(houseUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
@@ -42,7 +42,7 @@ function RoomQRCode({ houseCode, roomName }) {
       borderRadius: '8px',
       textAlign: 'center'
     }}>
-      <h3 style={{ marginBottom: '15px', fontSize: '18px' }}>Room URL & QR Code</h3>
+      <h3 style={{ marginBottom: '15px', fontSize: '18px' }}>House Invite</h3>
 
       <canvas ref={canvasRef} style={{
         border: '4px solid var(--text-primary)',
@@ -59,7 +59,7 @@ function RoomQRCode({ houseCode, roomName }) {
         background: 'var(--bg-dark)',
         borderRadius: '4px'
       }}>
-        {roomUrl}
+        {houseUrl}
       </div>
 
       <button
@@ -82,7 +82,7 @@ function RoomQRCode({ houseCode, roomName }) {
         fontSize: '12px',
         color: 'var(--text-secondary)'
       }}>
-        Share this URL or QR code to invite others directly to this room
+        Share this URL or QR code to invite others to {houseCode}. They can choose their room after joining.
       </p>
     </div>
   )

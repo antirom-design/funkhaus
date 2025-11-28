@@ -1,13 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function JoinScreen({ onJoin, connected }) {
   const [houseCode, setHouseCode] = useState('')
-  const [roomName, setRoomName] = useState('')
+  const [userName, setUserName] = useState('')
+
+  // Check for URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const house = urlParams.get('house')
+    if (house) {
+      setHouseCode(house.toUpperCase())
+    }
+  }, [])
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (houseCode.trim() && roomName.trim()) {
-      onJoin(houseCode.trim().toUpperCase(), roomName.trim())
+    if (houseCode.trim() && userName.trim()) {
+      onJoin(houseCode.trim().toUpperCase(), userName.trim())
     }
   }
 
@@ -26,10 +35,11 @@ function JoinScreen({ onJoin, connected }) {
         />
         <input
           type="text"
-          placeholder="Room Name (e.g., Music Room)"
-          value={roomName}
-          onChange={(e) => setRoomName(e.target.value)}
+          placeholder="Your Name"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
           required
+          autoFocus={!!houseCode}
         />
         <button type="submit" disabled={!connected}>
           {connected ? 'JOIN HOUSE' : 'CONNECTING...'}
@@ -38,8 +48,8 @@ function JoinScreen({ onJoin, connected }) {
 
       <p className="info-text">
         {connected
-          ? 'First to join becomes Housemaster'
-          : 'Connecting to server... (Auto-switching to demo mode if unavailable)'}
+          ? 'Join house, then pick or create a room'
+          : 'Connecting to server...'}
       </p>
 
       <div style={{

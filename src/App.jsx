@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import JoinScreen from './components/JoinScreen'
+import RoomSelector from './components/RoomSelector'
 import MainScreen from './components/MainScreen'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useWebRTC } from './hooks/useWebRTC'
@@ -18,10 +19,13 @@ function App() {
     // Set attribute on root element for CSS targeting
     document.documentElement.setAttribute('data-view-mode', isMobileDevice ? 'mobile' : 'desktop')
   }, [])
-  const [joined, setJoined] = useState(false)
+
+  // Join flow states: null → 'inHouse' → 'inRoom'
+  const [joinState, setJoinState] = useState(null)
   const [houseCode, setHouseCode] = useState('')
+  const [userName, setUserName] = useState('')
+  const [userId, setUserId] = useState('')
   const [roomName, setRoomName] = useState('')
-  const [autoJoinAttempted, setAutoJoinAttempted] = useState(false)
   const [isHousemaster, setIsHousemaster] = useState(false)
   const [mode, setMode] = useState('announcement') // announcement, returnChannel, free
   const [rooms, setRooms] = useState([])
@@ -36,18 +40,25 @@ function App() {
     connected,
     sendMessage,
     joinHouse,
+    joinRoom,
+    createRoom,
     changeMode,
     sendChatMessage
   } = useWebSocket({
-    onJoined: (data) => {
-      setJoined(true)
+    onHouseJoined: (data) => {
+      setUserId(data.userId)
       setIsHousemaster(data.isHousemaster)
       setMode(data.mode)
       setRooms(data.rooms)
-      addSystemMessage(`Joined house ${houseCode} as ${roomName}`)
+      setJoinState('inHouse')
       if (data.isHousemaster) {
         addSystemMessage('You are the Housemaster!')
       }
+    },
+    onRoomJoined: (data) => {
+      setRoomName(data.roomName)
+      setJoinState('inRoom')
+      addSystemMessage(`Joined room: ${data.roomName}`)
     },
     onRoomsUpdate: (roomsList) => {
       setRooms(roomsList)
@@ -64,7 +75,7 @@ function App() {
       }
     },
     onTalkStateChange: (data) => {
-      setTalkingRoom(data.talking ? data.roomName : null)
+      setTalkingRoom(data.talking ? data.userId : null)
     }
   })
 
@@ -93,7 +104,7 @@ function App() {
     audioLevel
   } = useWebRTC({
     houseCode,
-    roomName,
+    userId,
     sendSignal: sendMessage,
     onAudioLevel: handleAudioLevel
   })
@@ -106,24 +117,19 @@ function App() {
     }])
   }
 
-  // Check for URL parameters on mount
-  useEffect(() => {
-    if (!autoJoinAttempted && connected) {
-      const urlParams = new URLSearchParams(window.location.search)
-      const house = urlParams.get('house')
-      const room = urlParams.get('room')
-
-      if (house && room) {
-        handleJoin(house, room)
-      }
-      setAutoJoinAttempted(true)
-    }
-  }, [connected, autoJoinAttempted])
-
-  const handleJoin = (code, name) => {
+  const handleJoinHouse = (code, name) => {
     setHouseCode(code)
-    setRoomName(name)
+    setUserName(name)
     joinHouse(code, name)
+  }
+
+  const handleSelectRoom = (name) => {
+    joinRoom(name)
+  }
+
+  const handleCreateRoom = (name) => {
+    createRoom(name, false) // Create temporary room
+    joinRoom(name) // Automatically join the new room
   }
 
   const handleModeChange = (newMode) => {
@@ -174,8 +180,21 @@ function App() {
     addSystemMessage('Killed all audio connections')
   }
 
-  if (!joined) {
-    return <JoinScreen onJoin={handleJoin} connected={connected} />
+  // Three-phase UI: JoinScreen → RoomSelector → MainScreen
+  if (joinState === null) {
+    return <JoinScreen onJoin={handleJoinHouse} connected={connected} />
+  }
+
+  if (joinState === 'inHouse') {
+    return (
+      <RoomSelector
+        houseCode={houseCode}
+        userName={userName}
+        rooms={rooms}
+        onSelectRoom={handleSelectRoom}
+        onCreateRoom={handleCreateRoom}
+      />
+    )
   }
 
   return (

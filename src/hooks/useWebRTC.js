@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 
-export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
+export function useWebRTC({ houseCode, userId, sendSignal, onAudioLevel }) {
   const [isTalking, setIsTalking] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
   const localStream = useRef(null)
@@ -40,7 +40,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       window.removeEventListener('force-stop-talking', handleForceStop)
       cleanup()
     }
-  }, [roomName])
+  }, [userId])
 
   const cleanup = () => {
     if (animationFrame.current) {
@@ -99,7 +99,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
         setAudioLevel(level)
 
         if (onAudioLevel) {
-          onAudioLevel(roomName, level)
+          onAudioLevel(userId, level)
         }
 
         // Continue monitoring as long as stream exists
@@ -134,7 +134,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       startAudioLevelMonitoring(stream)
 
       // Notify server
-      sendSignal('startTalk', { target, roomName, houseCode })
+      sendSignal('startTalk', { target, userId, houseCode })
 
       console.log('Microphone access granted, will create offers when init signal received')
 
@@ -174,7 +174,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
     }
 
     // Notify server
-    sendSignal('stopTalk', { roomName, houseCode })
+    sendSignal('stopTalk', { userId, houseCode })
     setIsTalking(null)
     setAudioLevel(0)
   }
@@ -184,39 +184,39 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       console.log('Received signal from:', from, 'type:', signal.type)
 
       // Only handle signals if we're the target or it's for ALL
-      if (target !== 'ALL' && target !== roomName) {
+      if (target !== 'ALL' && target !== userId) {
         console.log('Signal not for us, ignoring')
         return
       }
 
       if (signal.type === 'start-offers') {
-        // Talker received signal to create offers for target rooms
-        console.log('Creating offers for rooms:', signal.targets)
-        for (const targetRoom of signal.targets) {
-          const pc = await createPeerConnection(targetRoom)
+        // Talker received signal to create offers for target users
+        console.log('Creating offers for users:', signal.targets)
+        for (const targetUserId of signal.targets) {
+          const pc = await createPeerConnection(targetUserId)
 
           // If connection already exists, add tracks and renegotiate
-          if (peerConnections.current[targetRoom] && localStream.current && !activeSenders.current[targetRoom]) {
-            console.log('Reusing existing connection, adding tracks to:', targetRoom)
+          if (peerConnections.current[targetUserId] && localStream.current && !activeSenders.current[targetUserId]) {
+            console.log('Reusing existing connection, adding tracks to:', targetUserId)
             const senders = []
             localStream.current.getTracks().forEach(track => {
               const sender = pc.addTrack(track, localStream.current)
               senders.push(sender)
               console.log('Re-added track:', track.kind)
             })
-            activeSenders.current[targetRoom] = senders
+            activeSenders.current[targetUserId] = senders
           }
 
           const offer = await pc.createOffer()
           await pc.setLocalDescription(offer)
 
           sendSignal('webrtc-signal', {
-            to: targetRoom,
-            from: roomName,
+            to: targetUserId,
+            from: userId,
             signal: offer,
-            target: targetRoom
+            target: targetUserId
           })
-          console.log('Sent offer to:', targetRoom)
+          console.log('Sent offer to:', targetUserId)
         }
       } else if (signal.type === 'offer') {
         console.log('Creating answer for offer from:', from)
@@ -227,7 +227,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
 
         sendSignal('webrtc-signal', {
           to: from,
-          from: roomName,
+          from: userId,
           signal: answer,
           target: from
         })
@@ -335,7 +335,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
         console.log('Sending ICE candidate to:', peerId)
         sendSignal('webrtc-signal', {
           to: peerId,
-          from: roomName,
+          from: userId,
           signal: { candidate: event.candidate },
           target: peerId
         })
