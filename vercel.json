@@ -1,0 +1,16 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/ws",
+      "destination": "/api/websocket"
+    }
+  ],
+  "functions": {
+    "api/websocket.js": {
+      "runtime": "nodejs18.x"
+    }
+  }
+}
