@@ -3,7 +3,6 @@ import { useRef, useState, useEffect, useCallback } from 'react'
 export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   const [isTalking, setIsTalking] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
-  const [isConnected, setIsConnected] = useState(false)
   const localStream = useRef(null)
   const peerConnections = useRef({})
   const audioContext = useRef(null)
@@ -219,7 +218,6 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
           })
           console.log('Sent offer to:', targetRoom)
         }
-        setIsConnected(true)
       } else if (signal.type === 'offer') {
         console.log('Creating answer for offer from:', from)
         const pc = await createPeerConnection(from)
@@ -386,7 +384,6 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   return {
     isTalking,
     audioLevel,
-    isConnected,
     startTalking,
     stopTalking
   }

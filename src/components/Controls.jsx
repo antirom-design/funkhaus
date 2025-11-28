@@ -6,7 +6,6 @@ function Controls({
   mode,
   selectedRoom,
   isTalking,
-  isConnected,
   canTalkToAll,
   viewMode,
   onModeChange,
@@ -273,11 +272,11 @@ function Controls({
         <div style={{ width: '100%', padding: '20px 0' }}>
           <div style={{ marginBottom: '15px', textAlign: 'center' }}>
             <p style={{
-              color: !isConnected && isTalking === null ? 'var(--warning)' : 'var(--text-primary)',
+              color: 'var(--text-primary)',
               fontSize: '14px',
               marginBottom: '5px'
             }}>
-              {!isConnected && isTalking === null ? '⚠️ Connecting...' : isTalking ? '🔴 TALKING' : 'Slide right to talk →'}
+              {isTalking ? '🔴 TALKING' : 'Slide right to talk →'}
             </p>
           </div>
 
@@ -347,7 +346,7 @@ function Controls({
         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
           <button
             className={`talk-button all ${isTalking === 'ALL' ? 'active' : ''}`}
-            disabled={!canTalkToAll || (!isConnected && isTalking === null)}
+            disabled={!canTalkToAll}
             onMouseDown={() => handleMouseDown(onTalkToAll)}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
@@ -355,12 +354,12 @@ function Controls({
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
           >
-            {!isConnected && isTalking === null ? 'Connecting...' : getTalkToAllLabel()}
+            {getTalkToAllLabel()}
           </button>
 
           <button
             className={`talk-button ${isTalking === selectedRoom ? 'active' : ''}`}
-            disabled={!selectedRoom || (!isConnected && isTalking === null)}
+            disabled={!selectedRoom}
             onMouseDown={() => handleMouseDown(() => onTalkToRoom(selectedRoom))}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
@@ -368,7 +367,7 @@ function Controls({
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
           >
-            {!isConnected && isTalking === null ? 'Connecting...' : getTalkToRoomLabel()}
+            {getTalkToRoomLabel()}
           </button>
         </div>
       )}

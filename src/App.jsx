@@ -90,8 +90,7 @@ function App() {
     startTalking,
     stopTalking,
     isTalking,
-    audioLevel,
-    isConnected
+    audioLevel
   } = useWebRTC({
     houseCode,
     roomName,
@@ -191,7 +190,6 @@ function App() {
       selectedRoom={selectedRoom}
       talkingRoom={talkingRoom}
       isTalking={isTalking}
-      isConnected={isConnected}
       canTalkToAll={canTalkToAll()}
       isDemoMode={isDemoMode}
       audioLevel={audioLevel}
