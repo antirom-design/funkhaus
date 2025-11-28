@@ -7,10 +7,5 @@
       "source": "/api/ws",
       "destination": "/api/websocket"
     }
-  ],
-  "functions": {
-    "api/websocket.js": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  ]
 }
