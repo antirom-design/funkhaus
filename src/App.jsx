@@ -16,6 +16,7 @@ function App() {
   const [selectedRoom, setSelectedRoom] = useState(null)
   const [talkingRoom, setTalkingRoom] = useState(null)
   const [isDemoMode, setIsDemoMode] = useState(false)
+  const [roomAudioLevels, setRoomAudioLevels] = useState({})
 
   const {
     connected,
@@ -53,14 +54,34 @@ function App() {
     }
   })
 
+  const handleAudioLevel = (fromRoom, level) => {
+    setRoomAudioLevels(prev => ({
+      ...prev,
+      [fromRoom]: level
+    }))
+
+    // Clear audio level after a short delay
+    if (level === 0) {
+      setTimeout(() => {
+        setRoomAudioLevels(prev => {
+          const newLevels = { ...prev }
+          delete newLevels[fromRoom]
+          return newLevels
+        })
+      }, 100)
+    }
+  }
+
   const {
     startTalking,
     stopTalking,
-    isTalking
+    isTalking,
+    audioLevel
   } = useWebRTC({
     houseCode,
     roomName,
-    sendSignal: sendMessage
+    sendSignal: sendMessage,
+    onAudioLevel: handleAudioLevel
   })
 
   const addSystemMessage = (text) => {
@@ -137,6 +158,8 @@ function App() {
       isTalking={isTalking}
       canTalkToAll={canTalkToAll()}
       isDemoMode={isDemoMode}
+      audioLevel={audioLevel}
+      roomAudioLevels={roomAudioLevels}
       onModeChange={handleModeChange}
       onSelectRoom={setSelectedRoom}
       onTalkToAll={handleTalkToAll}

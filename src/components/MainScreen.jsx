@@ -16,6 +16,8 @@ function MainScreen({
   isTalking,
   canTalkToAll,
   isDemoMode,
+  audioLevel,
+  roomAudioLevels,
   onModeChange,
   onSelectRoom,
   onTalkToAll,
@@ -70,6 +72,8 @@ function MainScreen({
           currentRoom={roomName}
           selectedRoom={selectedRoom}
           talkingRoom={talkingRoom}
+          audioLevel={audioLevel}
+          roomAudioLevels={roomAudioLevels}
           onSelectRoom={onSelectRoom}
         />
 

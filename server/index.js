@@ -231,14 +231,40 @@ function handleMessage(ws, message) {
       const connection = connections.get(ws)
       if (!connection) return
 
+      const { target } = data
+
+      // Broadcast that this room is talking
       broadcastToHouse(connection.houseCode, {
         type: 'talkState',
         data: {
           talking: true,
           roomName: connection.roomName,
-          target: data.target
+          target: target
         }
       })
+
+      // Signal other rooms to initiate WebRTC connection
+      if (target === 'ALL') {
+        // Tell all rooms to connect
+        broadcastToHouse(connection.houseCode, {
+          type: 'signal',
+          data: {
+            from: connection.roomName,
+            signal: { type: 'init' },
+            target: 'ALL'
+          }
+        }, ws)
+      } else {
+        // Tell specific room to connect
+        sendToRoom(connection.houseCode, target, {
+          type: 'signal',
+          data: {
+            from: connection.roomName,
+            signal: { type: 'init' },
+            target: target
+          }
+        })
+      }
       break
     }
 
@@ -256,19 +282,35 @@ function handleMessage(ws, message) {
       break
     }
 
-    case 'signal': {
+    case 'signal':
+    case 'webrtc-signal': {
       // WebRTC signaling relay
       const connection = connections.get(ws)
       if (!connection) return
 
-      const { to, signal } = data
-      sendToRoom(connection.houseCode, to, {
-        type: 'signal',
-        data: {
-          from: connection.roomName,
-          signal
-        }
-      })
+      const { to, signal, target } = data
+
+      if (to === 'ALL' || target === 'ALL') {
+        // Broadcast signal to all rooms except sender
+        broadcastToHouse(connection.houseCode, {
+          type: 'signal',
+          data: {
+            from: connection.roomName,
+            signal,
+            target: 'ALL'
+          }
+        }, ws)
+      } else {
+        // Send to specific room
+        sendToRoom(connection.houseCode, to, {
+          type: 'signal',
+          data: {
+            from: connection.roomName,
+            signal,
+            target: to
+          }
+        })
+      }
       break
     }
 
