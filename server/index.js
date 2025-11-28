@@ -232,6 +232,7 @@ function handleMessage(ws, message) {
       if (!connection) return
 
       const { target } = data
+      const house = houses.get(connection.houseCode)
 
       // Broadcast that this room is talking
       broadcastToHouse(connection.houseCode, {
@@ -243,28 +244,18 @@ function handleMessage(ws, message) {
         }
       })
 
-      // Signal other rooms to initiate WebRTC connection
-      if (target === 'ALL') {
-        // Tell all rooms to connect
-        broadcastToHouse(connection.houseCode, {
-          type: 'signal',
-          data: {
-            from: connection.roomName,
-            signal: { type: 'init' },
-            target: 'ALL'
-          }
-        }, ws)
-      } else {
-        // Tell specific room to connect
-        sendToRoom(connection.houseCode, target, {
-          type: 'signal',
-          data: {
-            from: connection.roomName,
-            signal: { type: 'init' },
-            target: target
-          }
-        })
-      }
+      // Send list of target rooms back to talker so they can create offers
+      const targetRooms = target === 'ALL'
+        ? Array.from(house.rooms.keys()).filter(r => r !== connection.roomName)
+        : [target]
+
+      sendToClient(ws, {
+        type: 'signal',
+        data: {
+          signal: { type: 'start-offers', targets: targetRooms },
+          target: connection.roomName
+        }
+      })
       break
     }
 

@@ -107,10 +107,10 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       // Start audio level monitoring
       startAudioLevelMonitoring(stream)
 
-      // Notify server and initiate peer connections
+      // Notify server
       sendSignal('startTalk', { target, roomName, houseCode })
 
-      console.log('Microphone access granted, starting peer connections')
+      console.log('Microphone access granted, will create offers when init signal received')
 
     } catch (error) {
       console.error('Error accessing microphone:', error)
@@ -151,7 +151,23 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
         return
       }
 
-      if (signal.type === 'offer') {
+      if (signal.type === 'start-offers') {
+        // Talker received signal to create offers for target rooms
+        console.log('Creating offers for rooms:', signal.targets)
+        for (const targetRoom of signal.targets) {
+          const pc = await createPeerConnection(targetRoom)
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+
+          sendSignal('webrtc-signal', {
+            to: targetRoom,
+            from: roomName,
+            signal: offer,
+            target: targetRoom
+          })
+          console.log('Sent offer to:', targetRoom)
+        }
+      } else if (signal.type === 'offer') {
         console.log('Creating answer for offer from:', from)
         const pc = await createPeerConnection(from)
         await pc.setRemoteDescription(new RTCSessionDescription(signal))
@@ -177,20 +193,6 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
           console.log('Adding ICE candidate from:', from)
           await pc.addIceCandidate(new RTCIceCandidate(signal.candidate))
         }
-      } else if (signal.type === 'init') {
-        // Receiver initiates connection when someone starts talking
-        console.log('Initializing connection to talker:', from)
-        const pc = await createPeerConnection(from)
-        const offer = await pc.createOffer()
-        await pc.setLocalDescription(offer)
-
-        sendSignal('webrtc-signal', {
-          to: from,
-          from: roomName,
-          signal: offer,
-          target: from
-        })
-        console.log('Sent offer to:', from)
       }
     } catch (error) {
       console.error('Error handling remote signal:', error)
