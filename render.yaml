@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: funkhaus-websocket
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: cd server && node index.js
+    envVars:
+      - key: PORT
+        value: 10000
