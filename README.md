@@ -120,23 +120,49 @@ funkhaus/
 
 **Important:** Vercel doesn't support WebSocket servers. Deploy the server separately:
 
-#### Option 1: Railway.app
+#### Option 1: Railway.app (Recommended - Easy Web Deploy)
+
+**Quick Deploy via Railway Web Interface:**
+
+1. **Sign up at Railway:**
+   - Go to https://railway.app/
+   - Sign in with GitHub
+
+2. **Deploy from GitHub:**
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Choose the `funkhaus` repository
+   - Railway will auto-detect the configuration
+
+3. **Configure (if needed):**
+   - Railway should automatically use the `Procfile` and `railway.json`
+   - Start command: `cd server && npm install && node index.js`
+
+4. **Get your WebSocket URL:**
+   - Once deployed, go to Settings → Generate Domain
+   - Copy the domain (e.g., `funkhaus-production.up.railway.app`)
+   - Your WebSocket URL will be: `wss://funkhaus-production.up.railway.app`
+
+5. **Update FunkHaus app:**
+   - See "Update WebSocket URL" section below
+
+**Alternative: Railway CLI**
 ```bash
-# Install Railway CLI
+# Install Railway CLI (requires Node 18+)
 npm i -g @railway/cli
 
 # Login and deploy
 railway login
-railway init
 railway up
 ```
 
 #### Option 2: Render.com
-1. Create new Web Service
-2. Connect GitHub repo
-3. Build command: `npm install`
-4. Start command: `npm run server`
-5. Copy the WebSocket URL
+1. Go to https://render.com/
+2. New → Web Service
+3. Connect GitHub repo: `funkhaus`
+4. Build command: `cd server && npm install`
+5. Start command: `cd server && node index.js`
+6. Copy the URL and use it as WebSocket URL (change https to wss)
 
 #### Option 3: Fly.io
 ```bash
@@ -150,12 +176,20 @@ fly deploy
 
 ### Update WebSocket URL
 
-After deploying the server, update `src/hooks/useWebSocket.js`:
+After deploying the server, update `src/hooks/useWebSocket.js` line 23:
 
 ```javascript
 const wsUrl = import.meta.env.PROD
-  ? 'wss://your-server-url.railway.app'  // Your deployed server URL
+  ? 'wss://your-deployed-server.railway.app'  // Replace with your actual Railway/Render URL
   : 'ws://localhost:3001'
+```
+
+Then redeploy to Vercel:
+```bash
+git add src/hooks/useWebSocket.js
+git commit -m "Update WebSocket server URL"
+git push
+vercel --prod
 ```
 
 ## How It Works
