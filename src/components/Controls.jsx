@@ -7,6 +7,7 @@ function Controls({
   selectedRoom,
   isTalking,
   canTalkToAll,
+  viewMode,
   onModeChange,
   onTalkToAll,
   onTalkToRoom,
@@ -15,18 +16,15 @@ function Controls({
   onAdminLogout,
   onKillAllAudio
 }) {
-  const [isMobile, setIsMobile] = useState(false)
-  const [tapMode, setTapMode] = useState(false)
+  const [tapMode, setTapMode] = useState(viewMode === 'mobile')
   const [showAdminPrompt, setShowAdminPrompt] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
   const buttonRefs = useRef({})
 
   useEffect(() => {
-    // Detect mobile device
-    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
-    setIsMobile(mobile)
-    setTapMode(mobile)
-  }, [])
+    // Update tap mode when view mode changes
+    setTapMode(viewMode === 'mobile')
+  }, [viewMode])
 
   const handleMouseDown = (action) => {
     if (!isTalking && !tapMode) {
@@ -241,7 +239,7 @@ function Controls({
         </button>
       </div>
 
-      {tapMode && (
+      {viewMode === 'mobile' && tapMode && (
         <button
           onClick={() => setTapMode(false)}
           style={{ fontSize: '12px', padding: '8px 16px' }}

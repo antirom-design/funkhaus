@@ -5,6 +5,19 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useWebRTC } from './hooks/useWebRTC'
 
 function App() {
+  const [viewMode, setViewMode] = useState('desktop') // 'desktop' or 'mobile'
+
+  useEffect(() => {
+    // Auto-detect device type
+    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+                           window.innerWidth < 768 ||
+                           ('ontouchstart' in window)
+
+    setViewMode(isMobileDevice ? 'mobile' : 'desktop')
+
+    // Set attribute on root element for CSS targeting
+    document.documentElement.setAttribute('data-view-mode', isMobileDevice ? 'mobile' : 'desktop')
+  }, [])
   const [joined, setJoined] = useState(false)
   const [houseCode, setHouseCode] = useState('')
   const [roomName, setRoomName] = useState('')
@@ -181,6 +194,7 @@ function App() {
       isDemoMode={isDemoMode}
       audioLevel={audioLevel}
       roomAudioLevels={roomAudioLevels}
+      viewMode={viewMode}
       onModeChange={handleModeChange}
       onSelectRoom={setSelectedRoom}
       onTalkToAll={handleTalkToAll}

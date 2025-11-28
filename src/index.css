@@ -279,153 +279,133 @@ input:focus, select:focus {
   text-align: center;
 }
 
-/* Mobile Responsive Styles */
-@media (max-width: 768px) {
-  body {
-    overflow: auto;
-  }
-
-  .join-screen h1 {
-    font-size: 32px;
-  }
-
-  .join-form {
-    min-width: auto;
-    width: 90%;
-    max-width: 400px;
-  }
-
-  .header {
-    flex-direction: column;
-    gap: 10px;
-    padding: 15px;
-  }
-
-  .header h2 {
-    font-size: 18px;
-  }
-
-  .header > div {
-    text-align: center !important;
-  }
-
-  .content {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .room-list {
-    width: 100%;
-    max-height: 40vh;
-    border-right: none;
-    border-bottom: 2px solid var(--border-color);
-    padding: 15px;
-  }
-
-  .room-list h3 {
-    font-size: 16px;
-  }
-
-  .room-item {
-    padding: 16px;
-    margin-bottom: 10px;
-    min-height: 60px;
-  }
-
-  .main-area {
-    min-height: 40vh;
-  }
-
-  .chat-area {
-    padding: 15px;
-  }
-
-  .chat-input-area {
-    padding: 15px;
-    flex-direction: column;
-  }
-
-  .chat-input-area button {
-    width: 100%;
-  }
-
-  .controls {
-    padding: 20px 15px;
-    gap: 15px;
-  }
-
-  .mode-controls {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .mode-controls button {
-    width: 100%;
-  }
-
-  .talk-button {
-    width: 100%;
-    min-width: auto;
-    padding: 24px 20px;
-    font-size: 18px;
-    touch-action: manipulation;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  /* Hide QR code on mobile */
-  .content > div:last-child {
-    display: none;
-  }
-
-  button {
-    padding: 14px 20px;
-    font-size: 16px;
-    touch-action: manipulation;
-  }
-
-  input, select {
-    padding: 14px;
-    font-size: 16px;
-  }
+/* Mobile-Only Styles (only when data-view-mode="mobile") */
+html[data-view-mode="mobile"] body {
+  overflow: auto;
 }
 
-/* Tablet Styles */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .room-list {
-    width: 250px;
-  }
-
-  .content > div:last-child {
-    width: 200px;
-    padding: 15px;
-  }
+html[data-view-mode="mobile"] .join-screen h1 {
+  font-size: 32px;
 }
 
-/* Prevent zoom on double-tap for iOS */
-button, input, select {
+html[data-view-mode="mobile"] .join-form {
+  min-width: auto;
+  width: 90%;
+  max-width: 400px;
+}
+
+html[data-view-mode="mobile"] .header {
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px;
+}
+
+html[data-view-mode="mobile"] .header h2 {
+  font-size: 18px;
+}
+
+html[data-view-mode="mobile"] .header > div {
+  text-align: center !important;
+}
+
+html[data-view-mode="mobile"] .content {
+  flex-direction: column;
+  height: auto;
+}
+
+html[data-view-mode="mobile"] .room-list {
+  width: 100%;
+  max-height: 40vh;
+  border-right: none;
+  border-bottom: 2px solid var(--border-color);
+  padding: 15px;
+}
+
+html[data-view-mode="mobile"] .room-list h3 {
+  font-size: 16px;
+}
+
+html[data-view-mode="mobile"] .room-item {
+  padding: 16px;
+  margin-bottom: 10px;
+  min-height: 60px;
+}
+
+html[data-view-mode="mobile"] .main-area {
+  min-height: 40vh;
+}
+
+html[data-view-mode="mobile"] .chat-area {
+  padding: 15px;
+}
+
+html[data-view-mode="mobile"] .chat-input-area {
+  padding: 15px;
+  flex-direction: column;
+}
+
+html[data-view-mode="mobile"] .chat-input-area button {
+  width: 100%;
+}
+
+html[data-view-mode="mobile"] .controls {
+  padding: 20px 15px;
+  gap: 15px;
+}
+
+html[data-view-mode="mobile"] .mode-controls {
+  width: 100%;
+  flex-direction: column;
+}
+
+html[data-view-mode="mobile"] .mode-controls button {
+  width: 100%;
+}
+
+html[data-view-mode="mobile"] .talk-button {
+  width: 100%;
+  min-width: auto;
+  padding: 24px 20px;
+  font-size: 18px;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Hide QR code on mobile */
+html[data-view-mode="mobile"] .content > div:last-child {
+  display: none;
+}
+
+html[data-view-mode="mobile"] button {
+  padding: 14px 20px;
+  font-size: 16px;
   touch-action: manipulation;
 }
 
-/* Better touch feedback */
-@media (hover: none) {
-  button:active:not(:disabled) {
-    transform: scale(0.95);
-    background: var(--button-active);
-  }
+html[data-view-mode="mobile"] input,
+html[data-view-mode="mobile"] select {
+  padding: 14px;
+  font-size: 16px;
+}
 
-  .talk-button.active {
-    animation: pulse-mobile 1s ease-in-out infinite;
-  }
+/* Touch feedback for mobile */
+html[data-view-mode="mobile"] button:active:not(:disabled) {
+  transform: scale(0.95);
+  background: var(--button-active);
+}
 
-  @keyframes pulse-mobile {
-    0%, 100% {
-      box-shadow: 0 0 10px var(--button-active);
-      transform: scale(1);
-    }
-    50% {
-      box-shadow: 0 0 30px var(--button-active);
-      transform: scale(1.02);
-    }
+html[data-view-mode="mobile"] .talk-button.active {
+  animation: pulse-mobile 1s ease-in-out infinite;
+}
+
+@keyframes pulse-mobile {
+  0%, 100% {
+    box-shadow: 0 0 10px var(--button-active);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px var(--button-active);
+    transform: scale(1.02);
   }
 }
