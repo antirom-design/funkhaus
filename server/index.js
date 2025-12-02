@@ -1,7 +1,52 @@
 import { WebSocketServer } from 'ws'
 import { createServer } from 'http'
+import express from 'express'
+import cors from 'cors'
+import rateLimit from 'express-rate-limit'
+import likesRouter from './routes/likes.js'
 
 const PORT = process.env.PORT || 3001
+
+// Initialize Express app
+const app = express()
+
+// CORS configuration
+app.use(cors({
+  origin: [
+    'https://pattern-echo.vercel.app',
+    'https://cogni-fidget.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8000'
+  ],
+  credentials: true
+}))
+
+// Rate limiting (100 requests per 15 minutes per IP)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests, please try again later'
+})
+
+// Middleware
+app.use(express.json())
+app.use('/api', limiter)
+
+// API Routes
+app.use('/api', likesRouter)
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'FunkHaus WebSocket & API Server',
+    endpoints: {
+      websocket: 'ws://<host>:<port>',
+      api: '/api/likes, /api/games'
+    }
+  })
+})
 
 // Store houses and their rooms
 const houses = new Map()
@@ -116,11 +161,8 @@ function sendToRoom(houseCode, targetRoom, message) {
   }
 }
 
-// Create HTTP server
-const server = createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' })
-  res.end('FunkHaus WebSocket Server')
-})
+// Create HTTP server from Express app
+const server = createServer(app)
 
 // Create WebSocket server
 const wss = new WebSocketServer({ server })
