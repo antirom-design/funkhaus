@@ -7,9 +7,9 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 // Database file location
-const DB_PATH = process.env.NODE_ENV === 'production'
-  ? '/data/likes.db'  // Render persistent disk
-  : join(__dirname, 'likes.db')  // Local development
+// Note: Render free tier doesn't have persistent storage
+// Database will be ephemeral and reset on each deployment
+const DB_PATH = process.env.DATABASE_PATH || join(__dirname, 'likes.db')
 
 // Initialize database
 const db = new Database(DB_PATH)
