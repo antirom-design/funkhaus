@@ -197,6 +197,7 @@ function App() {
   return (
     <MainScreen
       sessionId={sessionId}
+      connected={connected}
       houseCode={houseCode}
       roomName={roomName}
       isHousemaster={isHousemaster}

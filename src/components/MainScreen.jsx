@@ -3,9 +3,11 @@ import RoomList from './RoomList'
 import ChatArea from './ChatArea'
 import Controls from './Controls'
 import RoomQRCode from './RoomQRCode'
+import DiagnosticPanel from './DiagnosticPanel'
 
 function MainScreen({
   sessionId,
+  connected,
   houseCode,
   roomName,
   isHousemaster,
@@ -114,6 +116,14 @@ function MainScreen({
         onAdminLogin={onAdminLogin}
         onAdminLogout={onAdminLogout}
         onKillAllAudio={onKillAllAudio}
+      />
+
+      <DiagnosticPanel
+        sessionId={sessionId}
+        connected={connected}
+        rooms={rooms}
+        isTalking={isTalking}
+        selectedRoom={selectedRoom}
       />
     </div>
   )

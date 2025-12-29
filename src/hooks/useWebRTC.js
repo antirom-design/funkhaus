@@ -44,9 +44,15 @@ export function useWebRTC({ sessionId, houseCode, roomName, sendSignal, onAudioL
     return () => {
       window.removeEventListener('webrtc-signal', handleSignal)
       window.removeEventListener('force-stop-talking', handleForceStop)
+    }
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
       cleanup()
     }
-  }, [roomName])
+  }, [])
 
   const cleanup = () => {
     if (animationFrame.current) {
@@ -120,7 +126,12 @@ export function useWebRTC({ sessionId, houseCode, roomName, sendSignal, onAudioL
 
   const startTalking = async (target) => {
     try {
-      console.log(`Starting to talk to: ${target}`)
+      console.log('🎤 Starting to talk:', {
+        target,
+        sessionId: sessionIdRef.current?.substring(0, 8),
+        houseCode,
+        roomName
+      })
 
       // Get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -187,7 +198,13 @@ export function useWebRTC({ sessionId, houseCode, roomName, sendSignal, onAudioL
 
   const handleRemoteSignal = async (fromSessionId, fromName, signal, target) => {
     try {
-      console.log('Received signal from:', fromName, '(', fromSessionId, ')', 'type:', signal.type)
+      console.log('🔊 WebRTC Signal Received:', {
+        from: fromName,
+        fromSessionId: fromSessionId?.substring(0, 8),
+        type: signal.type || 'candidate',
+        target,
+        mySessionId: sessionIdRef.current?.substring(0, 8)
+      })
 
       // Only handle signals if we're the target or it's for ALL
       if (target !== 'ALL' && target !== sessionIdRef.current) {
