@@ -51,58 +51,71 @@ app.get('/', (req, res) => {
 // Store houses and their rooms
 const houses = new Map()
 
-// Store WebSocket connections by room
+// Store connections by session ID
 const connections = new Map()
+
+// Store reverse lookup from WebSocket to session ID
+const wsToSessionId = new Map()
 
 function getHouse(houseCode) {
   if (!houses.has(houseCode)) {
     houses.set(houseCode, {
       code: houseCode,
       rooms: new Map(),
-      mode: 'announcement',
+      mode: 'free',
       housemaster: null
     })
   }
   return houses.get(houseCode)
 }
 
-function addRoom(houseCode, roomName, ws) {
+function addRoom(houseCode, roomName, sessionId, ws) {
   const house = getHouse(houseCode)
+
+  // Check for duplicate session ID
+  if (connections.has(sessionId)) {
+    console.error(`Duplicate session ID: ${sessionId}`)
+    return null
+  }
 
   // First room becomes housemaster
   const isHousemaster = house.rooms.size === 0
   if (isHousemaster) {
-    house.housemaster = roomName
+    house.housemaster = sessionId
   }
 
   const room = {
-    id: `${houseCode}-${roomName}-${Date.now()}`,
+    id: sessionId,
     name: roomName,
     houseCode,
     isHousemaster,
     ws
   }
 
-  house.rooms.set(roomName, room)
-  connections.set(ws, { houseCode, roomName })
+  house.rooms.set(sessionId, room)
+  connections.set(sessionId, { ws, houseCode, roomName })
+  wsToSessionId.set(ws, sessionId)
 
   return { room, house, isHousemaster }
 }
 
 function removeRoom(ws) {
-  const connection = connections.get(ws)
+  const sessionId = wsToSessionId.get(ws)
+  if (!sessionId) return
+
+  const connection = connections.get(sessionId)
   if (!connection) return
 
   const { houseCode, roomName } = connection
   const house = houses.get(houseCode)
 
   if (house) {
-    house.rooms.delete(roomName)
+    house.rooms.delete(sessionId)
 
     // If housemaster left, assign new one
-    if (house.housemaster === roomName && house.rooms.size > 0) {
+    if (house.housemaster === sessionId && house.rooms.size > 0) {
       const newHousemaster = Array.from(house.rooms.values())[0]
-      house.housemaster = newHousemaster.name
+      house.housemaster = newHousemaster.id
       newHousemaster.isHousemaster = true
 
       // Notify new housemaster
@@ -123,7 +136,8 @@ function removeRoom(ws) {
     }
   }
 
-  connections.delete(ws)
+  connections.delete(sessionId)
+  wsToSessionId.delete(ws)
 }
 
 function getRoomsList(house) {
@@ -151,11 +165,11 @@ function broadcastToHouse(houseCode, message, excludeWs = null) {
   })
 }
 
-function sendToRoom(houseCode, targetRoom, message) {
+function sendToRoom(houseCode, targetSessionId, message) {
   const house = houses.get(houseCode)
   if (!house) return
 
-  const room = house.rooms.get(targetRoom)
+  const room = house.rooms.get(targetSessionId)
   if (room) {
     sendToClient(room.ws, message)
   }
@@ -194,8 +208,28 @@ function handleMessage(ws, message) {
 
   switch (type) {
     case 'join': {
-      const { houseCode, roomName } = data
-      const { room, house, isHousemaster } = addRoom(houseCode, roomName, ws)
+      const { houseCode, roomName, sessionId } = data
+
+      // Validation
+      if (!sessionId || typeof sessionId !== 'string') {
+        sendToClient(ws, {
+          type: 'error',
+          message: 'Invalid session ID'
+        })
+        return
+      }
+
+      const result = addRoom(houseCode, roomName, sessionId, ws)
+
+      if (!result) {
+        sendToClient(ws, {
+          type: 'error',
+          message: 'Session already connected'
+        })
+        return
+      }
+
+      const { room, house, isHousemaster } = result
 
       // Send join confirmation
       sendToClient(ws, {
@@ -213,45 +247,50 @@ function handleMessage(ws, message) {
         data: getRoomsList(house)
       })
 
-      console.log(`${roomName} joined house ${houseCode}`)
+      console.log(`${roomName} (${sessionId.substring(0, 8)}) joined house ${houseCode}`)
       break
     }
 
     case 'changeMode': {
-      const connection = connections.get(ws)
+      const { sessionId, mode: newMode } = data
+      const connection = connections.get(sessionId)
       if (!connection) return
 
       const house = houses.get(connection.houseCode)
       if (!house) return
 
-      const room = house.rooms.get(connection.roomName)
+      const room = house.rooms.get(sessionId)
       if (!room || !room.isHousemaster) {
-        sendToClient(ws, {
+        sendToClient(connection.ws, {
           type: 'error',
           message: 'Only Housemaster can change mode'
         })
         return
       }
 
-      house.mode = data.mode
+      house.mode = newMode
       broadcastToHouse(connection.houseCode, {
         type: 'modeChange',
-        data: { mode: data.mode }
+        data: { mode: newMode }
       })
 
-      console.log(`House ${connection.houseCode} mode changed to ${data.mode}`)
+      console.log(`House ${connection.houseCode} mode changed to ${newMode}`)
       break
     }
 
     case 'chat': {
-      const connection = connections.get(ws)
+      const { sessionId, text, target } = data
+      const connection = connections.get(sessionId)
       if (!connection) return
 
-      const { text, target } = data
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
       const chatMessage = {
         type: 'chat',
         data: {
-          sender: connection.roomName,
+          sender: `${connection.roomName} [${sessionId.substring(0, 4)}]`,
+          senderId: sessionId,
           target: target,
           text: text,
           timestamp: Date.now()
@@ -261,54 +300,58 @@ function handleMessage(ws, message) {
       if (target === 'ALL') {
         broadcastToHouse(connection.houseCode, chatMessage)
       } else {
-        // Send to specific room
+        // Send to specific session
         sendToRoom(connection.houseCode, target, chatMessage)
         // Also send to sender
-        sendToClient(ws, chatMessage)
+        sendToClient(connection.ws, chatMessage)
       }
       break
     }
 
     case 'startTalk': {
-      const connection = connections.get(ws)
+      const { sessionId, target } = data
+      const connection = connections.get(sessionId)
       if (!connection) return
 
-      const { target } = data
       const house = houses.get(connection.houseCode)
+      if (!house) return
 
-      // Broadcast that this room is talking
+      // Broadcast that this session is talking
       broadcastToHouse(connection.houseCode, {
         type: 'talkState',
         data: {
           talking: true,
+          sessionId: sessionId,
           roomName: connection.roomName,
           target: target
         }
       })
 
-      // Send list of target rooms back to talker so they can create offers
-      const targetRooms = target === 'ALL'
-        ? Array.from(house.rooms.keys()).filter(r => r !== connection.roomName)
+      // Send list of target sessions back to talker so they can create offers
+      const targetSessions = target === 'ALL'
+        ? Array.from(house.rooms.keys()).filter(sid => sid !== sessionId)
         : [target]
 
-      sendToClient(ws, {
+      sendToClient(connection.ws, {
         type: 'signal',
         data: {
-          signal: { type: 'start-offers', targets: targetRooms },
-          target: connection.roomName
+          signal: { type: 'start-offers', targets: targetSessions },
+          sessionId: sessionId
         }
       })
       break
     }
 
     case 'stopTalk': {
-      const connection = connections.get(ws)
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
       if (!connection) return
 
       broadcastToHouse(connection.houseCode, {
         type: 'talkState',
         data: {
           talking: false,
+          sessionId: sessionId,
           roomName: connection.roomName
         }
       })
@@ -316,16 +359,17 @@ function handleMessage(ws, message) {
     }
 
     case 'killAllAudio': {
-      const connection = connections.get(ws)
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
       if (!connection) return
 
       const house = houses.get(connection.houseCode)
       if (!house) return
 
-      const room = house.rooms.get(connection.roomName)
+      const room = house.rooms.get(sessionId)
       // Only housemaster can kill all audio
       if (!room || !room.isHousemaster) {
-        sendToClient(ws, {
+        sendToClient(connection.ws, {
           type: 'error',
           message: 'Only Housemaster can kill all audio'
         })
@@ -345,27 +389,28 @@ function handleMessage(ws, message) {
     case 'signal':
     case 'webrtc-signal': {
       // WebRTC signaling relay
-      const connection = connections.get(ws)
+      const { sessionId, to, signal, target } = data
+      const connection = connections.get(sessionId)
       if (!connection) return
 
-      const { to, signal, target } = data
-
       if (to === 'ALL' || target === 'ALL') {
-        // Broadcast signal to all rooms except sender
+        // Broadcast signal to all sessions except sender
         broadcastToHouse(connection.houseCode, {
           type: 'signal',
           data: {
-            from: connection.roomName,
+            from: sessionId,
+            fromName: connection.roomName,
             signal,
             target: 'ALL'
           }
-        }, ws)
+        }, connection.ws)
       } else {
-        // Send to specific room
+        // Send to specific session
         sendToRoom(connection.houseCode, to, {
           type: 'signal',
           data: {
-            from: connection.roomName,
+            from: sessionId,
+            fromName: connection.roomName,
             signal,
             target: to
           }

@@ -6,6 +6,16 @@ import { useWebRTC } from './hooks/useWebRTC'
 
 function App() {
   const [viewMode, setViewMode] = useState('desktop') // 'desktop' or 'mobile'
+  const [sessionId, setSessionId] = useState(null)
+
+  // Generate unique session ID on mount
+  useEffect(() => {
+    const id = crypto.randomUUID ?
+      crypto.randomUUID() :
+      `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    setSessionId(id)
+    console.log('Generated session ID:', id)
+  }, [])
 
   useEffect(() => {
     // Auto-detect device type
@@ -23,7 +33,7 @@ function App() {
   const [roomName, setRoomName] = useState('')
   const [autoJoinAttempted, setAutoJoinAttempted] = useState(false)
   const [isHousemaster, setIsHousemaster] = useState(false)
-  const [mode, setMode] = useState('announcement') // announcement, returnChannel, free
+  const [mode, setMode] = useState('free') // announcement, returnChannel, free
   const [rooms, setRooms] = useState([])
   const [messages, setMessages] = useState([])
   const [selectedRoom, setSelectedRoom] = useState(null)
@@ -39,6 +49,7 @@ function App() {
     changeMode,
     sendChatMessage
   } = useWebSocket({
+    sessionId,
     onJoined: (data) => {
       setJoined(true)
       setIsHousemaster(data.isHousemaster)
@@ -64,7 +75,7 @@ function App() {
       }
     },
     onTalkStateChange: (data) => {
-      setTalkingRoom(data.talking ? data.roomName : null)
+      setTalkingRoom(data.talking ? data.sessionId : null)
     }
   })
 
@@ -92,6 +103,7 @@ function App() {
     isTalking,
     audioLevel
   } = useWebRTC({
+    sessionId,
     houseCode,
     roomName,
     sendSignal: sendMessage,
@@ -121,9 +133,13 @@ function App() {
   }, [connected, autoJoinAttempted])
 
   const handleJoin = (code, name) => {
+    if (!sessionId) {
+      console.error('Session ID not generated yet')
+      return
+    }
     setHouseCode(code)
     setRoomName(name)
-    joinHouse(code, name)
+    joinHouse(code, name, sessionId)
   }
 
   const handleModeChange = (newMode) => {
@@ -180,6 +196,7 @@ function App() {
 
   return (
     <MainScreen
+      sessionId={sessionId}
       houseCode={houseCode}
       roomName={roomName}
       isHousemaster={isHousemaster}

@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMockWebSocket } from './useMockWebSocket'
 
-export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
+export function useWebSocket({ sessionId, onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
   const [connected, setConnected] = useState(false)
   const [useMockMode, setUseMockMode] = useState(false)
   const ws = useRef(null)
   const reconnectTimeout = useRef(null)
   const connectionAttempts = useRef(0)
+  const sessionIdRef = useRef(sessionId)
+
+  // Keep sessionId ref updated
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
 
   // Use mock WebSocket if real connection fails after 3 attempts
-  const mockWs = useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange })
+  const mockWs = useMockWebSocket({ sessionId, onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange })
 
   useEffect(() => {
     if (!useMockMode) {
@@ -130,12 +136,15 @@ export function useWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMess
 
   const sendMessage = (type, data) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ type, data }))
+      ws.current.send(JSON.stringify({
+        type,
+        data: { ...data, sessionId: sessionIdRef.current }
+      }))
     }
   }
 
-  const joinHouse = (houseCode, roomName) => {
-    sendMessage('join', { houseCode, roomName })
+  const joinHouse = (houseCode, roomName, sessionId) => {
+    sendMessage('join', { houseCode, roomName, sessionId })
   }
 
   const changeMode = (mode) => {

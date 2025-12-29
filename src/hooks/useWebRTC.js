@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 
-export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
+export function useWebRTC({ sessionId, houseCode, roomName, sendSignal, onAudioLevel }) {
   const [isTalking, setIsTalking] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
   const localStream = useRef(null)
@@ -11,6 +11,12 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   const remoteAudios = useRef({})
   const isTalkingRef = useRef(null)
   const activeSenders = useRef({})
+  const sessionIdRef = useRef(sessionId)
+
+  // Keep sessionId ref updated
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -20,8 +26,8 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
   useEffect(() => {
     // Listen for WebRTC signals
     const handleSignal = (event) => {
-      const { from, signal, target } = event.detail
-      handleRemoteSignal(from, signal, target)
+      const { from, fromName, signal, target } = event.detail
+      handleRemoteSignal(from, fromName, signal, target)
     }
 
     // Listen for force stop talking from admin
@@ -99,7 +105,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
         setAudioLevel(level)
 
         if (onAudioLevel) {
-          onAudioLevel(roomName, level)
+          onAudioLevel(sessionIdRef.current, level)
         }
 
         // Continue monitoring as long as stream exists
@@ -134,7 +140,7 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
       startAudioLevelMonitoring(stream)
 
       // Notify server
-      sendSignal('startTalk', { target, roomName, houseCode })
+      sendSignal('startTalk', { target, roomName, houseCode, sessionId: sessionIdRef.current })
 
       console.log('Microphone access granted, will create offers when init signal received')
 
@@ -174,74 +180,76 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
     }
 
     // Notify server
-    sendSignal('stopTalk', { roomName, houseCode })
+    sendSignal('stopTalk', { roomName, houseCode, sessionId: sessionIdRef.current })
     setIsTalking(null)
     setAudioLevel(0)
   }
 
-  const handleRemoteSignal = async (from, signal, target) => {
+  const handleRemoteSignal = async (fromSessionId, fromName, signal, target) => {
     try {
-      console.log('Received signal from:', from, 'type:', signal.type)
+      console.log('Received signal from:', fromName, '(', fromSessionId, ')', 'type:', signal.type)
 
       // Only handle signals if we're the target or it's for ALL
-      if (target !== 'ALL' && target !== roomName) {
+      if (target !== 'ALL' && target !== sessionIdRef.current) {
         console.log('Signal not for us, ignoring')
         return
       }
 
       if (signal.type === 'start-offers') {
-        // Talker received signal to create offers for target rooms
-        console.log('Creating offers for rooms:', signal.targets)
-        for (const targetRoom of signal.targets) {
-          const pc = await createPeerConnection(targetRoom)
+        // Talker received signal to create offers for target sessions
+        console.log('Creating offers for sessions:', signal.targets)
+        for (const targetSessionId of signal.targets) {
+          const pc = await createPeerConnection(targetSessionId)
 
           // If connection already exists, add tracks and renegotiate
-          if (peerConnections.current[targetRoom] && localStream.current && !activeSenders.current[targetRoom]) {
-            console.log('Reusing existing connection, adding tracks to:', targetRoom)
+          if (peerConnections.current[targetSessionId] && localStream.current && !activeSenders.current[targetSessionId]) {
+            console.log('Reusing existing connection, adding tracks to:', targetSessionId)
             const senders = []
             localStream.current.getTracks().forEach(track => {
               const sender = pc.addTrack(track, localStream.current)
               senders.push(sender)
               console.log('Re-added track:', track.kind)
             })
-            activeSenders.current[targetRoom] = senders
+            activeSenders.current[targetSessionId] = senders
           }
 
           const offer = await pc.createOffer()
           await pc.setLocalDescription(offer)
 
           sendSignal('webrtc-signal', {
-            to: targetRoom,
+            to: targetSessionId,
             from: roomName,
             signal: offer,
-            target: targetRoom
+            target: targetSessionId,
+            sessionId: sessionIdRef.current
           })
-          console.log('Sent offer to:', targetRoom)
+          console.log('Sent offer to:', targetSessionId)
         }
       } else if (signal.type === 'offer') {
-        console.log('Creating answer for offer from:', from)
-        const pc = await createPeerConnection(from)
+        console.log('Creating answer for offer from:', fromSessionId)
+        const pc = await createPeerConnection(fromSessionId)
         await pc.setRemoteDescription(new RTCSessionDescription(signal))
         const answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
 
         sendSignal('webrtc-signal', {
-          to: from,
+          to: fromSessionId,
           from: roomName,
           signal: answer,
-          target: from
+          target: fromSessionId,
+          sessionId: sessionIdRef.current
         })
-        console.log('Sent answer to:', from)
+        console.log('Sent answer to:', fromSessionId)
       } else if (signal.type === 'answer') {
-        const pc = peerConnections.current[from]
+        const pc = peerConnections.current[fromSessionId]
         if (pc) {
-          console.log('Setting remote answer from:', from)
+          console.log('Setting remote answer from:', fromSessionId)
           await pc.setRemoteDescription(new RTCSessionDescription(signal))
         }
       } else if (signal.candidate) {
-        const pc = peerConnections.current[from]
+        const pc = peerConnections.current[fromSessionId]
         if (pc && pc.remoteDescription) {
-          console.log('Adding ICE candidate from:', from)
+          console.log('Adding ICE candidate from:', fromSessionId)
           await pc.addIceCandidate(new RTCIceCandidate(signal.candidate))
         }
       }
@@ -337,7 +345,8 @@ export function useWebRTC({ houseCode, roomName, sendSignal, onAudioLevel }) {
           to: peerId,
           from: roomName,
           signal: { candidate: event.candidate },
-          target: peerId
+          target: peerId,
+          sessionId: sessionIdRef.current
         })
       }
     }

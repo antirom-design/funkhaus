@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 
 function Controls({
+  rooms,
   isHousemaster,
   isAdmin,
   mode,
@@ -147,8 +148,13 @@ function Controls({
 
   const getTalkToRoomLabel = () => {
     if (!selectedRoom) return 'SELECT A ROOM'
-    if (isTalking === selectedRoom) return `🔴 TALKING TO ${selectedRoom}`
-    return `TALK TO ${selectedRoom}`
+
+    // Find room by session ID to get display name
+    const room = rooms.find(r => r.id === selectedRoom)
+    const roomDisplayName = room ? `${room.name} [${room.id.substring(0, 4)}]` : 'ROOM'
+
+    if (isTalking === selectedRoom) return `🔴 TALKING TO ${roomDisplayName}`
+    return `TALK TO ${roomDisplayName}`
   }
 
   return (

@@ -1,25 +1,25 @@
-function RoomList({ rooms, currentRoom, selectedRoom, talkingRoom, audioLevel, roomAudioLevels, onSelectRoom }) {
-  const getAudioLevelForRoom = (roomName) => {
-    if (roomName === currentRoom) {
+function RoomList({ rooms, currentSessionId, selectedRoom, talkingRoom, audioLevel, roomAudioLevels, onSelectRoom }) {
+  const getAudioLevelForRoom = (sessionId) => {
+    if (sessionId === currentSessionId) {
       return audioLevel || 0
     }
-    return roomAudioLevels?.[roomName] || 0
+    return roomAudioLevels?.[sessionId] || 0
   }
 
   return (
     <div className="room-list">
       <h3>ROOMS ({rooms.length})</h3>
       {rooms.map((room) => {
-        const level = getAudioLevelForRoom(room.name)
+        const level = getAudioLevelForRoom(room.id)
         const isActive = level > 5
 
         return (
           <div
             key={room.id}
-            className={`room-item ${room.name === selectedRoom ? 'selected' : ''} ${
+            className={`room-item ${room.id === selectedRoom ? 'selected' : ''} ${
               room.isHousemaster ? 'housemaster' : ''
-            } ${room.name === talkingRoom ? 'talking' : ''}`}
-            onClick={() => onSelectRoom(room.name === selectedRoom ? null : room.name)}
+            } ${room.id === talkingRoom ? 'talking' : ''}`}
+            onClick={() => onSelectRoom(room.id === selectedRoom ? null : room.id)}
             style={{
               position: 'relative',
               overflow: 'hidden'
@@ -41,8 +41,8 @@ function RoomList({ rooms, currentRoom, selectedRoom, talkingRoom, audioLevel, r
 
             <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
               <div>
-                <div>{room.name}</div>
-                {room.name === currentRoom && (
+                <div>{room.name} [{room.id.substring(0, 4)}]</div>
+                {room.id === currentSessionId && (
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(You)</div>
                 )}
               </div>

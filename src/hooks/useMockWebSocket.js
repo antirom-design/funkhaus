@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 
 // Mock WebSocket for demo mode when real server is unavailable
-export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
+export function useMockWebSocket({ sessionId, onJoined, onRoomsUpdate, onModeChange, onChatMessage, onTalkStateChange }) {
   const [connected, setConnected] = useState(false)
   const mockRooms = useRef(new Map())
   const currentUser = useRef(null)
   const currentHouse = useRef(null)
-  const mode = useRef('announcement')
+  const mode = useRef('free')
 
   useEffect(() => {
     // Simulate connection delay
@@ -27,7 +27,8 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
       case 'startTalk':
         onTalkStateChange({
           talking: true,
-          roomName: currentUser.current.roomName,
+          sessionId: currentUser.current.id,
+          roomName: currentUser.current.name,
           target: data.target
         })
 
@@ -35,7 +36,8 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
         setTimeout(() => {
           onTalkStateChange({
             talking: false,
-            roomName: currentUser.current.roomName
+            sessionId: currentUser.current.id,
+            roomName: currentUser.current.name
           })
         }, 5000)
         break
@@ -43,22 +45,23 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
       case 'stopTalk':
         onTalkStateChange({
           talking: false,
-          roomName: currentUser.current.roomName
+          sessionId: currentUser.current.id,
+          roomName: currentUser.current.name
         })
         break
     }
   }
 
-  const joinHouse = (houseCode, roomName) => {
+  const joinHouse = (houseCode, roomName, providedSessionId) => {
     currentHouse.current = houseCode
     currentUser.current = {
-      id: `${houseCode}-${roomName}-${Date.now()}`,
+      id: providedSessionId,
       name: roomName,
       houseCode,
       isHousemaster: mockRooms.current.size === 0
     }
 
-    mockRooms.current.set(roomName, currentUser.current)
+    mockRooms.current.set(providedSessionId, currentUser.current)
 
     // Add some demo rooms
     if (mockRooms.current.size === 1) {
@@ -70,10 +73,14 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
         ]
 
         demoRooms.forEach((room, idx) => {
-          if (!mockRooms.current.has(room.name)) {
-            setTimeout(() => {
-              mockRooms.current.set(room.name, {
-                id: `${houseCode}-${room.name}-${Date.now()}`,
+          setTimeout(() => {
+            const demoSessionId = crypto.randomUUID ?
+              crypto.randomUUID() :
+              `demo-${room.name}-${Date.now()}`
+
+            if (!mockRooms.current.has(demoSessionId)) {
+              mockRooms.current.set(demoSessionId, {
+                id: demoSessionId,
                 name: room.name,
                 houseCode,
                 isHousemaster: false
@@ -86,8 +93,8 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
                 text: `${room.name} joined the house`,
                 timestamp: Date.now()
               })
-            }, idx * 1000)
-          }
+            }
+          }, idx * 1000)
         })
       }, 1000)
     }
@@ -108,7 +115,8 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
 
   const sendChatMessage = (text, target) => {
     const message = {
-      sender: currentUser.current.name,
+      sender: `${currentUser.current.name} [${currentUser.current.id.substring(0, 4)}]`,
+      senderId: currentUser.current.id,
       target: target,
       text: text,
       timestamp: Date.now()
@@ -120,13 +128,15 @@ export function useMockWebSocket({ onJoined, onRoomsUpdate, onModeChange, onChat
     if (target === 'ALL') {
       setTimeout(() => {
         const responders = Array.from(mockRooms.current.values())
-          .filter(room => room.name !== currentUser.current.name && !room.isHousemaster)
+          .filter(room => room.id !== currentUser.current.id && !room.isHousemaster)
 
         if (responders.length > 0) {
           const randomRoom = responders[Math.floor(Math.random() * responders.length)]
           onChatMessage({
-            sender: randomRoom.name,
-            target: currentUser.current.name,
+            sender: `${randomRoom.name} [${randomRoom.id.substring(0, 4)}]`,
+            senderId: randomRoom.id,
+            target: currentUser.current.id,
+            targetName: currentUser.current.name,
             text: `Message received! (Demo response from ${randomRoom.name})`,
             timestamp: Date.now()
           })

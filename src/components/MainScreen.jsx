@@ -5,6 +5,7 @@ import Controls from './Controls'
 import RoomQRCode from './RoomQRCode'
 
 function MainScreen({
+  sessionId,
   houseCode,
   roomName,
   isHousemaster,
@@ -74,7 +75,7 @@ function MainScreen({
       <div className="content">
         <RoomList
           rooms={rooms}
-          currentRoom={roomName}
+          currentSessionId={sessionId}
           selectedRoom={selectedRoom}
           talkingRoom={talkingRoom}
           audioLevel={audioLevel}
@@ -98,6 +99,7 @@ function MainScreen({
       </div>
 
       <Controls
+        rooms={rooms}
         isHousemaster={isHousemaster}
         isAdmin={isAdmin}
         mode={mode}
