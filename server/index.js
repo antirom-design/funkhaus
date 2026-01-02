@@ -440,7 +440,7 @@ function handleMessage(ws, message) {
     }
 
     case 'startPoll': {
-      const { sessionId, question, options } = data
+      const { sessionId, question, options, showRealtime = false, duration = 10 } = data
       const connection = connections.get(sessionId)
       if (!connection) return
 
@@ -465,12 +465,14 @@ function handleMessage(ws, message) {
         return
       }
 
-      // Create poll
+      // Create poll with configurable duration
+      const durationMs = Math.max(5, Math.min(120, duration)) * 1000
       const poll = {
         question,
         options: options.map(opt => ({ text: opt, votes: [] })),
+        showRealtime,
         startedAt: Date.now(),
-        endAt: Date.now() + 30000
+        endAt: Date.now() + durationMs
       }
 
       activePolls.set(connection.houseCode, poll)
@@ -481,11 +483,13 @@ function handleMessage(ws, message) {
         data: {
           question,
           options,
+          showRealtime,
+          duration,
           endAt: poll.endAt
         }
       })
 
-      // Auto-end after 30 seconds
+      // Auto-end after duration
       setTimeout(() => {
         const activePoll = activePolls.get(connection.houseCode)
         if (activePoll) {
@@ -498,9 +502,9 @@ function handleMessage(ws, message) {
           })
           activePolls.delete(connection.houseCode)
         }
-      }, 30000)
+      }, durationMs)
 
-      console.log(`Poll started in house ${connection.houseCode}: ${question}`)
+      console.log(`Poll started in house ${connection.houseCode}: ${question} (${duration}s, realtime: ${showRealtime})`)
       break
     }
 
@@ -534,13 +538,15 @@ function handleMessage(ws, message) {
       // Add new vote
       poll.options[optionIndex].votes.push(sessionId)
 
-      // Broadcast updated results
-      broadcastToHouse(connection.houseCode, {
-        type: 'pollUpdate',
-        data: {
-          options: poll.options
-        }
-      })
+      // Only broadcast updated results if showRealtime is enabled
+      if (poll.showRealtime) {
+        broadcastToHouse(connection.houseCode, {
+          type: 'pollUpdate',
+          data: {
+            options: poll.options
+          }
+        })
+      }
       break
     }
 
