@@ -328,6 +328,25 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'typing': {
+      const { sessionId, isTyping } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Broadcast typing status to all other users in the house
+      broadcastToHouse(connection.houseCode, {
+        type: 'userTyping',
+        data: {
+          sessionId: sessionId,
+          isTyping: isTyping
+        }
+      }, connection.ws)  // Exclude sender
+      break
+    }
+
     case 'startTalk': {
       const { sessionId, target } = data
       const connection = connections.get(sessionId)
