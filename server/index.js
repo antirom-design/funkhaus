@@ -10,16 +10,32 @@ const PORT = process.env.PORT || 3001
 // Initialize Express app
 const app = express()
 
-// CORS configuration
+// CORS configuration - allow all vercel.app domains
 app.use(cors({
-  origin: [
-    'https://pattern-echo.vercel.app',
-    'https://cogni-fidget.vercel.app',
-    'https://frontend-hreoroecd-antiroms-projects.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:8000'
-  ],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+
+    // Allow all vercel.app subdomains
+    if (origin.endsWith('.vercel.app') || origin.endsWith('vercel.app')) {
+      return callback(null, true);
+    }
+
+    // Allow specific domains
+    const allowedOrigins = [
+      'https://pattern-echo.vercel.app',
+      'https://cogni-fidget.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8000'
+    ];
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }))
 
