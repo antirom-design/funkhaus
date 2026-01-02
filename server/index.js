@@ -57,6 +57,9 @@ const connections = new Map()
 // Store reverse lookup from WebSocket to session ID
 const wsToSessionId = new Map()
 
+// Store active polls per house
+const activePolls = new Map()
+
 function getHouse(houseCode) {
   if (!houses.has(houseCode)) {
     houses.set(houseCode, {
@@ -416,6 +419,111 @@ function handleMessage(ws, message) {
           }
         })
       }
+      break
+    }
+
+    case 'startPoll': {
+      const { sessionId, question, options } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can start polls'
+        })
+        return
+      }
+
+      // Check if poll already active
+      if (activePolls.has(connection.houseCode)) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'A poll is already running'
+        })
+        return
+      }
+
+      // Create poll
+      const poll = {
+        question,
+        options: options.map(opt => ({ text: opt, votes: [] })),
+        startedAt: Date.now(),
+        endAt: Date.now() + 30000
+      }
+
+      activePolls.set(connection.houseCode, poll)
+
+      // Broadcast poll to house
+      broadcastToHouse(connection.houseCode, {
+        type: 'pollStarted',
+        data: {
+          question,
+          options,
+          endAt: poll.endAt
+        }
+      })
+
+      // Auto-end after 30 seconds
+      setTimeout(() => {
+        const activePoll = activePolls.get(connection.houseCode)
+        if (activePoll) {
+          broadcastToHouse(connection.houseCode, {
+            type: 'pollEnded',
+            data: {
+              question: activePoll.question,
+              results: activePoll.options
+            }
+          })
+          activePolls.delete(connection.houseCode)
+        }
+      }, 30000)
+
+      console.log(`Poll started in house ${connection.houseCode}: ${question}`)
+      break
+    }
+
+    case 'vote': {
+      const { sessionId, optionIndex } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const poll = activePolls.get(connection.houseCode)
+      if (!poll) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'No active poll'
+        })
+        return
+      }
+
+      if (optionIndex < 0 || optionIndex >= poll.options.length) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Invalid option'
+        })
+        return
+      }
+
+      // Remove previous vote
+      poll.options.forEach(opt => {
+        opt.votes = opt.votes.filter(v => v !== sessionId)
+      })
+
+      // Add new vote
+      poll.options[optionIndex].votes.push(sessionId)
+
+      // Broadcast updated results
+      broadcastToHouse(connection.houseCode, {
+        type: 'pollUpdate',
+        data: {
+          options: poll.options
+        }
+      })
       break
     }
 
