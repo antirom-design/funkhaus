@@ -465,14 +465,15 @@ function handleMessage(ws, message) {
         return
       }
 
-      // Create poll with configurable duration
-      const durationMs = Math.max(5, Math.min(120, duration)) * 1000
+      // Create poll with optional duration
+      const hasTimeLimit = duration !== null && duration !== undefined
+      const durationMs = hasTimeLimit ? Math.max(5, Math.min(120, duration)) * 1000 : null
       const poll = {
         question,
         options: options.map(opt => ({ text: opt, votes: [] })),
         showRealtime,
         startedAt: Date.now(),
-        endAt: Date.now() + durationMs
+        endAt: hasTimeLimit ? Date.now() + durationMs : null
       }
 
       activePolls.set(connection.houseCode, poll)
@@ -484,25 +485,27 @@ function handleMessage(ws, message) {
           question,
           options,
           showRealtime,
-          duration,
+          duration: hasTimeLimit ? duration : null,
           endAt: poll.endAt
         }
       })
 
-      // Auto-end after duration
-      setTimeout(() => {
-        const activePoll = activePolls.get(connection.houseCode)
-        if (activePoll) {
-          broadcastToHouse(connection.houseCode, {
-            type: 'pollEnded',
-            data: {
-              question: activePoll.question,
-              results: activePoll.options
-            }
-          })
-          activePolls.delete(connection.houseCode)
-        }
-      }, durationMs)
+      // Auto-end after duration (if time limit is set)
+      if (hasTimeLimit) {
+        setTimeout(() => {
+          const activePoll = activePolls.get(connection.houseCode)
+          if (activePoll) {
+            broadcastToHouse(connection.houseCode, {
+              type: 'pollEnded',
+              data: {
+                question: activePoll.question,
+                results: activePoll.options
+              }
+            })
+            activePolls.delete(connection.houseCode)
+          }
+        }, durationMs)
+      }
 
       console.log(`Poll started in house ${connection.houseCode}: ${question} (${duration}s, realtime: ${showRealtime})`)
       break
@@ -547,6 +550,85 @@ function handleMessage(ws, message) {
           }
         })
       }
+      break
+    }
+
+    case 'endPoll': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      // Only housemaster can end poll
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can end polls'
+        })
+        return
+      }
+
+      const activePoll = activePolls.get(connection.houseCode)
+      if (!activePoll) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'No active poll'
+        })
+        return
+      }
+
+      // Broadcast poll ended with results
+      broadcastToHouse(connection.houseCode, {
+        type: 'pollEnded',
+        data: {
+          question: activePoll.question,
+          results: activePoll.options
+        }
+      })
+
+      activePolls.delete(connection.houseCode)
+      console.log(`Poll ended by housemaster in house ${connection.houseCode}`)
+      break
+    }
+
+    case 'cancelPoll': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      // Only housemaster can cancel poll
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can cancel polls'
+        })
+        return
+      }
+
+      const activePoll = activePolls.get(connection.houseCode)
+      if (!activePoll) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'No active poll'
+        })
+        return
+      }
+
+      // Broadcast poll canceled
+      broadcastToHouse(connection.houseCode, {
+        type: 'pollCanceled',
+        data: {}
+      })
+
+      activePolls.delete(connection.houseCode)
+      console.log(`Poll canceled by housemaster in house ${connection.houseCode}`)
       break
     }
 
