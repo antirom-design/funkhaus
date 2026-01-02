@@ -440,7 +440,7 @@ function handleMessage(ws, message) {
     }
 
     case 'startPoll': {
-      const { sessionId, question, options, showRealtime = false, duration = 10 } = data
+      const { sessionId, question, options, showRealtime = false, duration = 10, multipleChoice = false } = data
       const connection = connections.get(sessionId)
       if (!connection) return
 
@@ -472,6 +472,7 @@ function handleMessage(ws, message) {
         question,
         options: options.map(opt => ({ text: opt, votes: [] })),
         showRealtime,
+        multipleChoice,
         startedAt: Date.now(),
         endAt: hasTimeLimit ? Date.now() + durationMs : null
       }
@@ -485,6 +486,7 @@ function handleMessage(ws, message) {
           question,
           options,
           showRealtime,
+          multipleChoice,
           duration: hasTimeLimit ? duration : null,
           endAt: poll.endAt
         }
@@ -533,13 +535,25 @@ function handleMessage(ws, message) {
         return
       }
 
-      // Remove previous vote
-      poll.options.forEach(opt => {
-        opt.votes = opt.votes.filter(v => v !== sessionId)
-      })
+      if (poll.multipleChoice) {
+        // Multiple choice: Toggle the vote
+        const currentOption = poll.options[optionIndex]
+        const hasVoted = currentOption.votes.includes(sessionId)
 
-      // Add new vote
-      poll.options[optionIndex].votes.push(sessionId)
+        if (hasVoted) {
+          // Remove vote
+          currentOption.votes = currentOption.votes.filter(v => v !== sessionId)
+        } else {
+          // Add vote
+          currentOption.votes.push(sessionId)
+        }
+      } else {
+        // Single choice: Remove previous vote and add new vote
+        poll.options.forEach(opt => {
+          opt.votes = opt.votes.filter(v => v !== sessionId)
+        })
+        poll.options[optionIndex].votes.push(sessionId)
+      }
 
       // Only broadcast updated results if showRealtime is enabled
       if (poll.showRealtime) {
