@@ -15,6 +15,7 @@ app.use(cors({
   origin: [
     'https://pattern-echo.vercel.app',
     'https://cogni-fidget.vercel.app',
+    'https://frontend-hreoroecd-antiroms-projects.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:8000'
