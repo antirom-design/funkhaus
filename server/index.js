@@ -200,9 +200,15 @@ function sendToRoom(houseCode, targetSessionId, message) {
 
 // Generate random grid for circle sort game
 function generateCircleGrid(gridSize, colorCount = 3) {
-  // Minimal color palette
-  const allColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
-  const colorPalette = allColors.slice(0, colorCount)
+  // Color palettes based on count
+  const palettes = {
+    2: ['#000000', '#ffffff'],           // Black & White
+    3: ['#3b82f6', '#ef4444', '#10b981'], // Blue, Red, Green
+    4: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'], // Blue, Red, Green, Orange
+    5: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'] // Blue, Red, Green, Orange, Purple
+  }
+
+  const colorPalette = palettes[colorCount] || palettes[3]
   const grid = []
 
   for (let y = 0; y < gridSize; y++) {
