@@ -199,8 +199,10 @@ function sendToRoom(houseCode, targetSessionId, message) {
 }
 
 // Generate random grid for circle sort game
-function generateCircleGrid(gridSize) {
-  const colorPalette = ['#667eea', '#764ba2', '#4CAF50', '#FF9800', '#f44336']
+function generateCircleGrid(gridSize, colorCount = 3) {
+  // Minimal color palette
+  const allColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+  const colorPalette = allColors.slice(0, colorCount)
   const grid = []
 
   for (let y = 0; y < gridSize; y++) {
@@ -687,7 +689,7 @@ function handleMessage(ws, message) {
     }
 
     case 'startCircleSort': {
-      const { sessionId, gridSize = 4, timeLimit = 120 } = data
+      const { sessionId, gridSize = 4, timeLimit = 120, rounds = 1, colorCount = 3 } = data
       const connection = connections.get(sessionId)
       if (!connection) return
 
@@ -713,7 +715,7 @@ function handleMessage(ws, message) {
       }
 
       // Generate random grid (same for all players)
-      const { grid, colorPalette } = generateCircleGrid(gridSize)
+      const { grid, colorPalette } = generateCircleGrid(gridSize, colorCount)
       const startTime = Date.now()
       const endTime = startTime + (timeLimit * 1000)
 
@@ -722,10 +724,14 @@ function handleMessage(ws, message) {
         gridSize,
         timeLimit,
         colorPalette,
+        colorCount,
+        totalRounds: rounds,
+        currentRound: 1,
         initialGrid: grid,
         startTime,
         endTime,
-        results: []
+        roundResults: [],
+        playerTotalScores: new Map() // Track cumulative scores across rounds
       }
 
       activeGames.set(connection.houseCode, game)
@@ -738,19 +744,21 @@ function handleMessage(ws, message) {
           timeLimit,
           colorPalette,
           initialGrid: grid,
-          startTime
+          startTime,
+          currentRound: 1,
+          totalRounds: rounds
         }
       })
 
-      // Auto-end game after time limit
+      // Auto-end round after time limit
       setTimeout(() => {
         const activeGame = activeGames.get(connection.houseCode)
-        if (activeGame) {
-          endCircleSortGame(connection.houseCode, activeGame)
+        if (activeGame && activeGame.currentRound === 1) {
+          endCircleSortRound(connection.houseCode, activeGame)
         }
       }, timeLimit * 1000)
 
-      console.log(`Circle Sort game started in house ${connection.houseCode}: ${gridSize}x${gridSize}, ${timeLimit}s`)
+      console.log(`Circle Sort game started in house ${connection.houseCode}: ${gridSize}x${gridSize}, ${timeLimit}s, ${rounds} rounds, ${colorCount} colors`)
       break
     }
 
@@ -771,15 +779,15 @@ function handleMessage(ws, message) {
       const house = houses.get(connection.houseCode)
       const room = house.rooms.get(sessionId)
 
-      // Check if user already submitted
-      const alreadySubmitted = game.results.some(r => r.userId === sessionId)
+      // Check if user already submitted for this round
+      const alreadySubmitted = game.roundResults.some(r => r.userId === sessionId)
       if (alreadySubmitted) {
-        console.log(`User ${sessionId} already submitted result`)
+        console.log(`User ${sessionId} already submitted result for round ${game.currentRound}`)
         return
       }
 
-      // Add result
-      game.results.push({
+      // Add result for this round
+      game.roundResults.push({
         userId: sessionId,
         userName: room.name,
         completionTime,
@@ -788,11 +796,15 @@ function handleMessage(ws, message) {
         completed
       })
 
-      console.log(`Result submitted by ${room.name}: ${completionTime}s, ${clicks} clicks, ${score} pts (${game.results.length}/${house.rooms.size})`)
+      // Update player's total score
+      const currentTotal = game.playerTotalScores.get(sessionId) || 0
+      game.playerTotalScores.set(sessionId, currentTotal + score)
 
-      // Check if all players have submitted
-      if (game.results.length >= house.rooms.size) {
-        endCircleSortGame(connection.houseCode, game)
+      console.log(`Result submitted by ${room.name}: ${completionTime}s, ${clicks} clicks, ${score} pts (Round ${game.currentRound}/${game.totalRounds}, ${game.roundResults.length}/${house.rooms.size})`)
+
+      // Check if all players have submitted for this round
+      if (game.roundResults.length >= house.rooms.size) {
+        endCircleSortRound(connection.houseCode, game)
       }
       break
     }
@@ -802,23 +814,114 @@ function handleMessage(ws, message) {
   }
 }
 
-// Helper function to end circle sort game
-function endCircleSortGame(houseCode, game) {
-  // Sort results by score (descending)
-  const sortedResults = game.results.sort((a, b) => b.score - a.score)
+// Helper function to end a circle sort round
+function endCircleSortRound(houseCode, game) {
+  // Sort round results by score (descending)
+  const sortedRoundResults = game.roundResults.sort((a, b) => b.score - a.score)
 
-  // Broadcast game ended with leaderboard
+  // Broadcast round ended with leaderboard
   broadcastToHouse(houseCode, {
     type: 'circleSortEnded',
     data: {
-      results: sortedResults,
+      results: sortedRoundResults,
       gridSize: game.gridSize,
-      timeLimit: game.timeLimit
+      timeLimit: game.timeLimit,
+      round: game.currentRound,
+      totalRounds: game.totalRounds
+    }
+  })
+
+  console.log(`Round ${game.currentRound}/${game.totalRounds} ended in house ${houseCode}. Winner: ${sortedRoundResults[0]?.userName || 'none'}`)
+
+  // Check if this was the last round
+  if (game.currentRound >= game.totalRounds) {
+    // Game is complete - show final leaderboard after a short delay
+    setTimeout(() => {
+      endCircleSortGame(houseCode, game)
+    }, 3000)
+  } else {
+    // Start next round after a short delay
+    setTimeout(() => {
+      startNextRound(houseCode, game)
+    }, 3000)
+  }
+}
+
+// Helper function to start the next round
+function startNextRound(houseCode, game) {
+  if (!activeGames.has(houseCode)) return // Game was cancelled
+
+  // Increment round
+  game.currentRound++
+
+  // Generate new grid
+  const { grid, colorPalette } = generateCircleGrid(game.gridSize, game.colorCount)
+  const startTime = Date.now()
+  const endTime = startTime + (game.timeLimit * 1000)
+
+  // Reset round data
+  game.initialGrid = grid
+  game.startTime = startTime
+  game.endTime = endTime
+  game.roundResults = []
+
+  // Broadcast next round start
+  broadcastToHouse(houseCode, {
+    type: 'circleSortStarted',
+    data: {
+      gridSize: game.gridSize,
+      timeLimit: game.timeLimit,
+      colorPalette,
+      initialGrid: grid,
+      startTime,
+      currentRound: game.currentRound,
+      totalRounds: game.totalRounds
+    }
+  })
+
+  // Auto-end round after time limit
+  setTimeout(() => {
+    const activeGame = activeGames.get(houseCode)
+    if (activeGame && activeGame.currentRound === game.currentRound) {
+      endCircleSortRound(houseCode, activeGame)
+    }
+  }, game.timeLimit * 1000)
+
+  console.log(`Round ${game.currentRound}/${game.totalRounds} started in house ${houseCode}`)
+}
+
+// Helper function to end the entire circle sort game
+function endCircleSortGame(houseCode, game) {
+  // Create final leaderboard from cumulative scores
+  const house = houses.get(houseCode)
+  if (!house) return
+
+  const finalResults = []
+  game.playerTotalScores.forEach((totalScore, userId) => {
+    const room = house.rooms.get(userId)
+    if (room) {
+      finalResults.push({
+        userId,
+        userName: room.name,
+        score: totalScore
+      })
+    }
+  })
+
+  // Sort by total score
+  const sortedResults = finalResults.sort((a, b) => b.score - a.score)
+
+  // Broadcast final game ended
+  broadcastToHouse(houseCode, {
+    type: 'circleSortGameEnded',
+    data: {
+      results: sortedResults,
+      totalRounds: game.totalRounds
     }
   })
 
   activeGames.delete(houseCode)
-  console.log(`Circle Sort game ended in house ${houseCode}. Winner: ${sortedResults[0]?.userName || 'none'}`)
+  console.log(`Circle Sort game complete in house ${houseCode}. Winner: ${sortedResults[0]?.userName || 'none'} (${sortedResults[0]?.score || 0} pts)`)
 }
 
 server.listen(PORT, () => {
