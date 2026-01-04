@@ -77,6 +77,9 @@ const wsToSessionId = new Map()
 // Store active polls per house
 const activePolls = new Map()
 
+// Store active circle sort games per house
+const activeGames = new Map()
+
 function getHouse(houseCode) {
   if (!houses.has(houseCode)) {
     houses.set(houseCode, {
@@ -193,6 +196,24 @@ function sendToRoom(houseCode, targetSessionId, message) {
   if (room) {
     sendToClient(room.ws, message)
   }
+}
+
+// Generate random grid for circle sort game
+function generateCircleGrid(gridSize) {
+  const colorPalette = ['#667eea', '#764ba2', '#4CAF50', '#FF9800', '#f44336']
+  const grid = []
+
+  for (let y = 0; y < gridSize; y++) {
+    const row = []
+    for (let x = 0; x < gridSize; x++) {
+      // Random color from palette
+      const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)]
+      row.push(randomColor)
+    }
+    grid.push(row)
+  }
+
+  return { grid, colorPalette }
 }
 
 // Create HTTP server from Express app
@@ -665,9 +686,139 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'startCircleSort': {
+      const { sessionId, gridSize = 4, timeLimit = 120 } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can start games'
+        })
+        return
+      }
+
+      // Check if game already active
+      if (activeGames.has(connection.houseCode)) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'A game is already running'
+        })
+        return
+      }
+
+      // Generate random grid (same for all players)
+      const { grid, colorPalette } = generateCircleGrid(gridSize)
+      const startTime = Date.now()
+      const endTime = startTime + (timeLimit * 1000)
+
+      // Create game state
+      const game = {
+        gridSize,
+        timeLimit,
+        colorPalette,
+        initialGrid: grid,
+        startTime,
+        endTime,
+        results: []
+      }
+
+      activeGames.set(connection.houseCode, game)
+
+      // Broadcast game start to all players
+      broadcastToHouse(connection.houseCode, {
+        type: 'circleSortStarted',
+        data: {
+          gridSize,
+          timeLimit,
+          colorPalette,
+          initialGrid: grid,
+          startTime
+        }
+      })
+
+      // Auto-end game after time limit
+      setTimeout(() => {
+        const activeGame = activeGames.get(connection.houseCode)
+        if (activeGame) {
+          endCircleSortGame(connection.houseCode, activeGame)
+        }
+      }, timeLimit * 1000)
+
+      console.log(`Circle Sort game started in house ${connection.houseCode}: ${gridSize}x${gridSize}, ${timeLimit}s`)
+      break
+    }
+
+    case 'submitCircleSort': {
+      const { sessionId, completionTime, clicks, score, completed } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const game = activeGames.get(connection.houseCode)
+      if (!game) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'No active game'
+        })
+        return
+      }
+
+      const house = houses.get(connection.houseCode)
+      const room = house.rooms.get(sessionId)
+
+      // Check if user already submitted
+      const alreadySubmitted = game.results.some(r => r.userId === sessionId)
+      if (alreadySubmitted) {
+        console.log(`User ${sessionId} already submitted result`)
+        return
+      }
+
+      // Add result
+      game.results.push({
+        userId: sessionId,
+        userName: room.name,
+        completionTime,
+        clicks,
+        score,
+        completed
+      })
+
+      console.log(`Result submitted by ${room.name}: ${completionTime}s, ${clicks} clicks, ${score} pts (${game.results.length}/${house.rooms.size})`)
+
+      // Check if all players have submitted
+      if (game.results.length >= house.rooms.size) {
+        endCircleSortGame(connection.houseCode, game)
+      }
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
+}
+
+// Helper function to end circle sort game
+function endCircleSortGame(houseCode, game) {
+  // Sort results by score (descending)
+  const sortedResults = game.results.sort((a, b) => b.score - a.score)
+
+  // Broadcast game ended with leaderboard
+  broadcastToHouse(houseCode, {
+    type: 'circleSortEnded',
+    data: {
+      results: sortedResults,
+      gridSize: game.gridSize,
+      timeLimit: game.timeLimit
+    }
+  })
+
+  activeGames.delete(houseCode)
+  console.log(`Circle Sort game ended in house ${houseCode}. Winner: ${sortedResults[0]?.userName || 'none'}`)
 }
 
 server.listen(PORT, () => {
