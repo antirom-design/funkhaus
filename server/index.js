@@ -815,6 +815,82 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'drawPoints': {
+      const { sessionId, points } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Add server timestamp for synchronization
+      const serverTimestamp = Date.now()
+
+      // Broadcast to all other users in the house
+      broadcastToHouse(connection.houseCode, {
+        type: 'remoteDrawPoints',
+        data: {
+          sessionId,
+          userName: connection.roomName,
+          points,
+          serverTimestamp
+        }
+      }, connection.ws)
+      break
+    }
+
+    case 'strokeStart': {
+      const { sessionId, strokeId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const serverTimestamp = Date.now()
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'remoteStrokeStart',
+        data: { sessionId, userName: connection.roomName, strokeId, serverTimestamp }
+      }, connection.ws)
+      break
+    }
+
+    case 'strokeEnd': {
+      const { sessionId, strokeId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'remoteStrokeEnd',
+        data: { sessionId, userName: connection.roomName, strokeId }
+      }, connection.ws)
+      break
+    }
+
+    case 'cursorMove': {
+      const { sessionId, x, y } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const serverTimestamp = Date.now()
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'remoteCursor',
+        data: { sessionId, userName: connection.roomName, x, y, serverTimestamp }
+      }, connection.ws)
+      break
+    }
+
+    case 'settingsUpdate': {
+      const { sessionId, settings } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'remoteSettings',
+        data: { sessionId, userName: connection.roomName, settings }
+      }, connection.ws)
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
