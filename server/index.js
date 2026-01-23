@@ -891,6 +891,81 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'modeChange': {
+      const { sessionId, mode } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Store mode on house
+      house.mode = mode
+
+      // Broadcast to ALL users in the house (including sender for confirmation)
+      broadcastToHouse(connection.houseCode, {
+        type: 'modeChange',
+        data: { mode, sessionId }
+      })
+
+      console.log(`Mode changed to ${mode} in house ${connection.houseCode} by ${connection.roomName}`)
+      break
+    }
+
+    case 'tafelStroke': {
+      const { sessionId, stroke } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast stroke to all other users
+      broadcastToHouse(connection.houseCode, {
+        type: 'tafelStroke',
+        data: { sessionId, userName: connection.roomName, stroke }
+      }, connection.ws)
+      break
+    }
+
+    case 'tafelErase': {
+      const { sessionId, strokeIds } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast erase to all other users
+      broadcastToHouse(connection.houseCode, {
+        type: 'tafelErase',
+        data: { sessionId, strokeIds }
+      }, connection.ws)
+      break
+    }
+
+    case 'tafelClear': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast clear to all other users
+      broadcastToHouse(connection.houseCode, {
+        type: 'tafelClear',
+        data: { sessionId }
+      }, connection.ws)
+
+      console.log(`Tafel cleared in house ${connection.houseCode} by ${connection.roomName}`)
+      break
+    }
+
+    case 'userColorChange': {
+      const { sessionId, color } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast color change to all other users
+      broadcastToHouse(connection.houseCode, {
+        type: 'userColorChange',
+        data: { sessionId, userName: connection.roomName, color }
+      }, connection.ws)
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
