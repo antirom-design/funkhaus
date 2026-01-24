@@ -953,6 +953,21 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'tafelClearMine': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast to all other users that this user cleared their drawings
+      broadcastToHouse(connection.houseCode, {
+        type: 'tafelClearMine',
+        data: { sessionId }
+      }, connection.ws)
+
+      console.log(`${connection.roomName} cleared their drawings in house ${connection.houseCode}`)
+      break
+    }
+
     case 'userColorChange': {
       const { sessionId, color } = data
       const connection = connections.get(sessionId)
