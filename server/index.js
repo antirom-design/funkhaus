@@ -85,8 +85,9 @@ function getHouse(houseCode) {
     houses.set(houseCode, {
       code: houseCode,
       rooms: new Map(),
-      mode: 'free',
-      housemaster: null
+      mode: 'trail',  // 'trail' or 'tafel'
+      housemaster: null,
+      tafelStrokes: new Map()  // strokeId -> stroke data
     })
   }
   return houses.get(houseCode)
@@ -280,13 +281,14 @@ function handleMessage(ws, message) {
 
       const { room, house, isHousemaster } = result
 
-      // Send join confirmation
+      // Send join confirmation with current mode and tafel strokes
       sendToClient(ws, {
         type: 'joined',
         data: {
           isHousemaster,
           mode: house.mode,
-          rooms: getRoomsList(house)
+          rooms: getRoomsList(house),
+          tafelStrokes: Array.from(house.tafelStrokes.values())
         }
       })
 
@@ -296,7 +298,7 @@ function handleMessage(ws, message) {
         data: getRoomsList(house)
       })
 
-      console.log(`${roomName} (${sessionId.substring(0, 8)}) joined house ${houseCode}`)
+      console.log(`${roomName} (${sessionId.substring(0, 8)}) joined house ${houseCode} (mode: ${house.mode}, strokes: ${house.tafelStrokes.size})`)
       break
     }
 
@@ -902,6 +904,9 @@ function handleMessage(ws, message) {
       // Store mode on house
       house.mode = mode
 
+      // Clear tafel strokes when mode changes
+      house.tafelStrokes.clear()
+
       // Broadcast to ALL users in the house (including sender for confirmation)
       broadcastToHouse(connection.houseCode, {
         type: 'modeChange',
@@ -917,6 +922,14 @@ function handleMessage(ws, message) {
       const connection = connections.get(sessionId)
       if (!connection) return
 
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Store stroke on server
+      if (stroke && stroke.strokeId) {
+        house.tafelStrokes.set(stroke.strokeId, stroke)
+      }
+
       // Broadcast stroke to all other users
       broadcastToHouse(connection.houseCode, {
         type: 'tafelStroke',
@@ -930,6 +943,16 @@ function handleMessage(ws, message) {
       const connection = connections.get(sessionId)
       if (!connection) return
 
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Remove strokes from server storage
+      if (strokeIds && Array.isArray(strokeIds)) {
+        for (const strokeId of strokeIds) {
+          house.tafelStrokes.delete(strokeId)
+        }
+      }
+
       // Broadcast erase to all other users
       broadcastToHouse(connection.houseCode, {
         type: 'tafelErase',
@@ -942,6 +965,12 @@ function handleMessage(ws, message) {
       const { sessionId } = data
       const connection = connections.get(sessionId)
       if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Clear all strokes on server
+      house.tafelStrokes.clear()
 
       // Broadcast clear to all other users
       broadcastToHouse(connection.houseCode, {
@@ -957,6 +986,16 @@ function handleMessage(ws, message) {
       const { sessionId } = data
       const connection = connections.get(sessionId)
       if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Remove this user's strokes from server storage
+      for (const [strokeId, stroke] of house.tafelStrokes) {
+        if (stroke.userId === sessionId) {
+          house.tafelStrokes.delete(strokeId)
+        }
+      }
 
       // Broadcast to all other users that this user cleared their drawings
       broadcastToHouse(connection.houseCode, {
