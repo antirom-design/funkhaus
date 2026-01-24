@@ -917,6 +917,20 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'tafelDrawing': {
+      // Live drawing points - broadcast immediately, don't store
+      const { sessionId, strokeId, points, strokeInfo } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast to all other users
+      broadcastToHouse(connection.houseCode, {
+        type: 'tafelDrawing',
+        data: { sessionId, userName: connection.roomName, strokeId, points, strokeInfo }
+      }, connection.ws)
+      break
+    }
+
     case 'tafelStroke': {
       const { sessionId, stroke } = data
       const connection = connections.get(sessionId)
