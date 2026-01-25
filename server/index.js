@@ -85,7 +85,7 @@ function getHouse(houseCode) {
     houses.set(houseCode, {
       code: houseCode,
       rooms: new Map(),
-      mode: 'trail',  // 'trail' or 'tafel'
+      mode: 'tafel',  // 'trail' or 'tafel' - tafel is default
       housemaster: null,
       tafelStrokes: new Map()  // strokeId -> stroke data
     })
