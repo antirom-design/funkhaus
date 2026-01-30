@@ -842,7 +842,7 @@ function handleMessage(ws, message) {
     }
 
     case 'strokeStart': {
-      const { sessionId, strokeId } = data
+      const { sessionId, strokeId, color } = data
       const connection = connections.get(sessionId)
       if (!connection) return
 
@@ -850,7 +850,7 @@ function handleMessage(ws, message) {
 
       broadcastToHouse(connection.houseCode, {
         type: 'remoteStrokeStart',
-        data: { sessionId, userName: connection.roomName, strokeId, serverTimestamp }
+        data: { sessionId, userName: connection.roomName, strokeId, color, serverTimestamp }
       }, connection.ws)
       break
     }
@@ -914,6 +914,21 @@ function handleMessage(ws, message) {
       })
 
       console.log(`Mode changed to ${mode} in house ${connection.houseCode} by ${connection.roomName}`)
+      break
+    }
+
+    case 'roomLifetimeChange': {
+      const { sessionId, lifetimeMs } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast to ALL users in the house (including sender for confirmation)
+      broadcastToHouse(connection.houseCode, {
+        type: 'roomLifetimeChange',
+        data: { lifetimeMs, sessionId }
+      })
+
+      console.log(`Trail lifetime changed to ${lifetimeMs}ms in house ${connection.houseCode} by ${connection.roomName}`)
       break
     }
 
