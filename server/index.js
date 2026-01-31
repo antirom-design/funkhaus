@@ -1099,7 +1099,8 @@ function handleMessage(ws, message) {
         questions, // Array of { id, text, options, correctIndex }
         scores: new Map(), // sessionId -> score
         streaks: new Map(), // sessionId -> current streak
-        startTime: Date.now()
+        startTime: Date.now(),
+        damageMultiplier: 1
       }
       activeQuizMissions.set(connection.houseCode, quiz)
 
@@ -1167,7 +1168,7 @@ function handleMessage(ws, message) {
           data: {
             from: sessionId,
             fromName: connection.roomName,
-            damage: 10 * shotLevel,
+            damage: 10 * shotLevel * (quiz.damageMultiplier || 1),
             level: shotLevel,
             streak: streak
           }
@@ -1210,6 +1211,26 @@ function handleMessage(ws, message) {
         data: {}
       })
       console.log(`Quiz Mission ended in house ${connection.houseCode}`)
+      break
+    }
+
+    case 'updateQuizSettings': {
+      const { sessionId, settings } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      const quiz = activeQuizMissions.get(connection.houseCode)
+      if (!house || !quiz) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) return
+
+      if (settings.damageMultiplier !== undefined) {
+        quiz.damageMultiplier = settings.damageMultiplier
+      }
+
+      console.log(`Quiz settings updated in house ${connection.houseCode}:`, settings)
       break
     }
 
