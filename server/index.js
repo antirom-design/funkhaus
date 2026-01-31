@@ -1193,6 +1193,26 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'endQuizMission': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) return
+
+      activeQuizMissions.delete(connection.houseCode)
+      broadcastToHouse(connection.houseCode, {
+        type: 'quizMissionEnded',
+        data: {}
+      })
+      console.log(`Quiz Mission ended in house ${connection.houseCode}`)
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
