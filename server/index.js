@@ -99,16 +99,24 @@ function getHouse(houseCode) {
 function addRoom(houseCode, roomName, sessionId, ws) {
   const house = getHouse(houseCode)
 
-  // Check for duplicate session ID
+  // Handle Reconnection: Close old connection if active
   if (connections.has(sessionId)) {
-    console.error(`Duplicate session ID: ${sessionId}`)
-    return null
+    console.log(`♻️ Session Reconnecting: ${sessionId}`)
+    const oldConn = connections.get(sessionId)
+    if (oldConn.ws !== ws) {
+      wsToSessionId.delete(oldConn.ws)
+      try {
+        oldConn.ws.close()
+      } catch (e) { }
+    }
   }
 
-  // First room becomes housemaster
-  const isHousemaster = house.rooms.size === 0
-  if (isHousemaster) {
-    house.housemaster = sessionId
+  // Determine Housemaster status (preserve if reconnecting)
+  let isHousemaster = house.rooms.size === 0
+  if (house.rooms.has(sessionId)) {
+    isHousemaster = house.rooms.get(sessionId).isHousemaster
+  } else {
+    if (isHousemaster) house.housemaster = sessionId
   }
 
   const room = {
