@@ -12,7 +12,7 @@ const app = express()
 
 // CORS configuration - allow all vercel.app domains
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl, etc)
     if (!origin) return callback(null, true);
 
@@ -79,6 +79,9 @@ const activePolls = new Map()
 
 // Store active circle sort games per house
 const activeGames = new Map()
+
+// Store active quiz missions per house
+const activeQuizMissions = new Map()
 
 function getHouse(houseCode) {
   if (!houses.has(houseCode)) {
@@ -1046,6 +1049,122 @@ function handleMessage(ws, message) {
         type: 'userColorChange',
         data: { sessionId, userName: connection.roomName, color }
       }, connection.ws)
+      break
+    }
+
+    case 'startQuizMission': {
+      const { sessionId, questions } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can start quiz'
+        })
+        return
+      }
+
+      // Store quiz state
+      const quiz = {
+        questions, // Array of { id, text, options, correctIndex }
+        scores: new Map(), // sessionId -> score
+        streaks: new Map(), // sessionId -> current streak
+        startTime: Date.now()
+      }
+      activeQuizMissions.set(connection.houseCode, quiz)
+
+      // Broadcast to all (students need questions, but maybe hide correctIndex?)
+      // For security, strip correctIndex from broadcast to students
+      const studentQuestions = questions.map(q => ({
+        id: q.id,
+        text: q.text,
+        options: q.options
+      }))
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'quizMissionStarted',
+        data: {
+          questions: studentQuestions
+        }
+      })
+
+      console.log(`Quiz Mission started in house ${connection.houseCode} with ${questions.length} questions`)
+      break
+    }
+
+    case 'submitQuizAnswer': {
+      const { sessionId, questionId, answerIndex } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      const quiz = activeQuizMissions.get(connection.houseCode)
+
+      if (!house || !quiz) {
+        sendToClient(connection.ws, { type: 'error', message: 'No active quiz' })
+        return
+      }
+
+      // Validate answer
+      const question = quiz.questions.find(q => q.id === questionId)
+      if (!question) return
+
+      const isCorrect = question.correctIndex === answerIndex
+
+      let streak = quiz.streaks.get(sessionId) || 0
+      let points = 0
+      let shotLevel = 1
+
+      if (isCorrect) {
+        // Increment streak
+        streak++
+        quiz.streaks.set(sessionId, streak)
+
+        // Calculate score (base + streak bonus)
+        points = 10 + (streak * 2)
+        const currentScore = quiz.scores.get(sessionId) || 0
+        quiz.scores.set(sessionId, currentScore + points)
+
+        // Determine shot level based on streak
+        // Streak 3+ = Level 2 (Big Shot), Streak 10+ = Level 3 (Super Shot)
+        if (streak >= 10) shotLevel = 3
+        else if (streak >= 3) shotLevel = 2
+
+        // Notify Host (Housemaster) to fire tower shot
+        // The Host acts as the Game Master for the physics simulation
+        broadcastToHouse(connection.houseCode, {
+          type: 'towerShot',
+          data: {
+            from: sessionId,
+            fromName: connection.roomName,
+            damage: 10 * shotLevel,
+            level: shotLevel,
+            streak: streak
+          }
+        })
+      } else {
+        // Reset streak on wrong answer
+        streak = 0
+        quiz.streaks.set(sessionId, 0)
+      }
+
+      // Reply to student with result and updated streak/rank info
+      sendToClient(connection.ws, {
+        type: 'quizResult',
+        data: {
+          questionId,
+          correct: isCorrect,
+          correctIndex: isCorrect ? answerIndex : question.correctIndex,
+          streak: streak,
+          pointsAdded: points,
+          totalScore: quiz.scores.get(sessionId)
+        }
+      })
       break
     }
 
