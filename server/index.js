@@ -381,6 +381,23 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'pulse': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      // Broadcast pulse to house (including Host)
+      broadcastToHouse(connection.houseCode, {
+        type: 'pulse',
+        data: {
+          from: sessionId,
+          fromName: connection.roomName
+        }
+      })
+      console.log(`Pulse from ${connection.roomName}`)
+      break
+    }
+
     case 'startTalk': {
       const { sessionId, target } = data
       const connection = connections.get(sessionId)
