@@ -1234,6 +1234,21 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'broadcast': {
+      // Generic broadcast - relay to all room members
+      const { sessionId, messageType, payload } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      console.log(`[Broadcast] ${messageType} from ${sessionId} in house ${connection.houseCode}`)
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'broadcast',
+        data: { messageType, payload, senderId: sessionId }
+      })
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
