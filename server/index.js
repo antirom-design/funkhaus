@@ -1249,6 +1249,18 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'playerMove': {
+      const { sessionId, position, direction } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'playerMove',
+        data: { sessionId, position, direction }
+      }, connection.ws)
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
