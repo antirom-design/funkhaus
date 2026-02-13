@@ -111,19 +111,10 @@ function addRoom(houseCode, roomName, sessionId, ws) {
     }
   }
 
-  // Cancel any pending housemaster reassignment (reconnect within grace period)
-  if (house.housemasterGrace) {
-    clearTimeout(house.housemasterGrace)
-    house.housemasterGrace = null
-  }
-
   // Determine Housemaster status (preserve if reconnecting)
   let isHousemaster = house.rooms.size === 0
   if (house.rooms.has(sessionId)) {
     isHousemaster = house.rooms.get(sessionId).isHousemaster
-  } else if (house.housemaster === sessionId) {
-    // Reconnecting housemaster (was disconnected but grace period not expired)
-    isHousemaster = true
   } else {
     if (isHousemaster) house.housemaster = sessionId
   }
@@ -163,35 +154,21 @@ function removeRoom(ws) {
   if (house) {
     house.rooms.delete(sessionId)
 
-    // If housemaster left, give 5s grace period for reconnect before reassigning
+    // If housemaster left, assign new one
     if (house.housemaster === sessionId && house.rooms.size > 0) {
-      house.housemasterGrace = setTimeout(() => {
-        house.housemasterGrace = null
-        // Only reassign if still disconnected
-        if (!house.rooms.has(sessionId) && house.rooms.size > 0) {
-          const newHousemaster = Array.from(house.rooms.values())[0]
-          house.housemaster = newHousemaster.id
-          newHousemaster.isHousemaster = true
+      const newHousemaster = Array.from(house.rooms.values())[0]
+      house.housemaster = newHousemaster.id
+      newHousemaster.isHousemaster = true
 
-          sendToClient(newHousemaster.ws, {
-            type: 'system',
-            message: 'You are now the Housemaster!'
-          })
-
-          broadcastToHouse(houseCode, {
-            type: 'rooms',
-            data: getRoomsList(house)
-          })
-        }
-      }, 5000)
+      // Notify new housemaster
+      sendToClient(newHousemaster.ws, {
+        type: 'system',
+        message: 'You are now the Housemaster!'
+      })
     }
 
     // Clean up empty houses
     if (house.rooms.size === 0) {
-      if (house.housemasterGrace) {
-        clearTimeout(house.housemasterGrace)
-        house.housemasterGrace = null
-      }
       houses.delete(houseCode)
     } else {
       broadcastToHouse(houseCode, {
