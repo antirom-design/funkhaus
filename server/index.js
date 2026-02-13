@@ -142,12 +142,6 @@ function removeRoom(ws) {
   const connection = connections.get(sessionId)
   if (!connection) return
 
-  // If this ws is stale (already replaced by reconnect), just clean up the mapping
-  if (connection.ws !== ws) {
-    wsToSessionId.delete(ws)
-    return
-  }
-
   const { houseCode, roomName } = connection
   const house = houses.get(houseCode)
 
