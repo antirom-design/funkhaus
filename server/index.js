@@ -134,6 +134,7 @@ function addRoom(houseCode, roomName, sessionId, ws) {
     houseCode,
     isHousemaster,
     canDraw: true,
+    hasHostView: false,
     ws
   }
 
@@ -210,7 +211,8 @@ function getRoomsList(house) {
     id: room.id,
     name: room.name,
     isHousemaster: room.isHousemaster,
-    canDraw: room.canDraw
+    canDraw: room.canDraw,
+    hasHostView: room.hasHostView
   }))
 }
 
@@ -1318,6 +1320,45 @@ function handleMessage(ws, message) {
       }
 
       // Broadcast updated room list to all
+      broadcastToHouse(connection.houseCode, {
+        type: 'rooms',
+        data: getRoomsList(house)
+      })
+      break
+    }
+
+    case 'setHostView': {
+      const { sessionId, targetSessionId, hasHostView, all } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can change host view'
+        })
+        return
+      }
+
+      if (all) {
+        house.rooms.forEach(r => {
+          if (!r.isHousemaster) {
+            r.hasHostView = hasHostView
+          }
+        })
+        console.log(`Host view set to ${hasHostView} for ALL in house ${connection.houseCode}`)
+      } else if (targetSessionId) {
+        const targetRoom = house.rooms.get(targetSessionId)
+        if (targetRoom && !targetRoom.isHousemaster) {
+          targetRoom.hasHostView = hasHostView
+          console.log(`Host view set to ${hasHostView} for ${targetRoom.name} in house ${connection.houseCode}`)
+        }
+      }
+
       broadcastToHouse(connection.houseCode, {
         type: 'rooms',
         data: getRoomsList(house)
