@@ -1320,6 +1320,18 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'playerCustomize': {
+      const { sessionId, customization } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'playerCustomize',
+        data: { sessionId, customization }
+      }, connection.ws)
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
