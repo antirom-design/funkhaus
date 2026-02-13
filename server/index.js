@@ -88,7 +88,7 @@ function getHouse(houseCode) {
     houses.set(houseCode, {
       code: houseCode,
       rooms: new Map(),
-      mode: 'tafel',  // 'trail' or 'tafel' - tafel is default
+      mode: 'avatar',  // 'avatar', 'tafel', 'trail', or 'quiz' - avatar is default
       housemaster: null,
       tafelStrokes: new Map()  // strokeId -> stroke data
     })
@@ -124,6 +124,7 @@ function addRoom(houseCode, roomName, sessionId, ws) {
     name: roomName,
     houseCode,
     isHousemaster,
+    canDraw: true,
     ws
   }
 
@@ -179,7 +180,8 @@ function getRoomsList(house) {
   return Array.from(house.rooms.values()).map(room => ({
     id: room.id,
     name: room.name,
-    isHousemaster: room.isHousemaster
+    isHousemaster: room.isHousemaster,
+    canDraw: room.canDraw
   }))
 }
 
@@ -853,6 +855,10 @@ function handleMessage(ws, message) {
       const house = houses.get(connection.houseCode)
       if (!house) return
 
+      // Enforce draw permission
+      const drawRoom = house.rooms.get(sessionId)
+      if (drawRoom && !drawRoom.canDraw) return
+
       // Add server timestamp for synchronization
       const serverTimestamp = Date.now()
 
@@ -1245,6 +1251,47 @@ function handleMessage(ws, message) {
       broadcastToHouse(connection.houseCode, {
         type: 'broadcast',
         data: { messageType, payload, senderId: sessionId }
+      })
+      break
+    }
+
+    case 'setDrawPermission': {
+      const { sessionId, targetSessionId, canDraw, all } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const room = house.rooms.get(sessionId)
+      if (!room || !room.isHousemaster) {
+        sendToClient(connection.ws, {
+          type: 'error',
+          message: 'Only Housemaster can change draw permissions'
+        })
+        return
+      }
+
+      if (all) {
+        // Toggle all non-housemaster users
+        house.rooms.forEach(r => {
+          if (!r.isHousemaster) {
+            r.canDraw = canDraw
+          }
+        })
+        console.log(`Draw permission set to ${canDraw} for ALL in house ${connection.houseCode}`)
+      } else if (targetSessionId) {
+        const targetRoom = house.rooms.get(targetSessionId)
+        if (targetRoom && !targetRoom.isHousemaster) {
+          targetRoom.canDraw = canDraw
+          console.log(`Draw permission set to ${canDraw} for ${targetRoom.name} in house ${connection.houseCode}`)
+        }
+      }
+
+      // Broadcast updated room list to all
+      broadcastToHouse(connection.houseCode, {
+        type: 'rooms',
+        data: getRoomsList(house)
       })
       break
     }
