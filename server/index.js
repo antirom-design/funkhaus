@@ -1308,6 +1308,18 @@ function handleMessage(ws, message) {
       break
     }
 
+    case 'playerJump': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'playerJump',
+        data: { sessionId }
+      }, connection.ws)
+      break
+    }
+
     default:
       console.log('Unknown message type:', type)
   }
