@@ -90,7 +90,9 @@ function getHouse(houseCode) {
       rooms: new Map(),
       mode: 'avatar',  // 'avatar', 'tafel', 'trail', or 'quiz' - avatar is default
       housemaster: null,
-      tafelStrokes: new Map()  // strokeId -> stroke data
+      tafelStrokes: new Map(),  // strokeId -> stroke data
+      chatMessages: [],         // last 50 chat messages
+      handQueue: []             // raise-hand queue [{sessionId, name, color, hasQuestion, questionText, raisedAt}]
     })
   }
   return houses.get(houseCode)
@@ -135,6 +137,8 @@ function addRoom(houseCode, roomName, sessionId, ws) {
     isHousemaster,
     canDraw: true,
     hasHostView: false,
+    canChat: true,
+    color: '#ffffff',
     ws
   }
 
@@ -212,7 +216,9 @@ function getRoomsList(house) {
     name: room.name,
     isHousemaster: room.isHousemaster,
     canDraw: room.canDraw,
-    hasHostView: room.hasHostView
+    hasHostView: room.hasHostView,
+    canChat: room.canChat,
+    color: room.color
   }))
 }
 
@@ -325,14 +331,16 @@ function handleMessage(ws, message) {
 
       const { room, house, isHousemaster } = result
 
-      // Send join confirmation with current mode and tafel strokes
+      // Send join confirmation with current mode, tafel strokes, and chat history
       sendToClient(ws, {
         type: 'joined',
         data: {
           isHousemaster,
           mode: house.mode,
           rooms: getRoomsList(house),
-          tafelStrokes: Array.from(house.tafelStrokes.values())
+          tafelStrokes: Array.from(house.tafelStrokes.values()),
+          chatMessages: house.chatMessages || [],
+          handQueue: house.handQueue || []
         }
       })
 
@@ -1106,6 +1114,13 @@ function handleMessage(ws, message) {
       const connection = connections.get(sessionId)
       if (!connection) return
 
+      // Store color on room for use in chat messages
+      const house = houses.get(connection.houseCode)
+      if (house) {
+        const room = house.rooms.get(sessionId)
+        if (room) room.color = color
+      }
+
       // Broadcast color change to all other users
       broadcastToHouse(connection.houseCode, {
         type: 'userColorChange',
@@ -1399,6 +1414,206 @@ function handleMessage(ws, message) {
         type: 'playerCustomize',
         data: { sessionId, customization }
       }, connection.ws)
+      break
+    }
+
+    case 'chatMessage': {
+      const { sessionId, text, replyTo } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const sender = house.rooms.get(sessionId)
+      if (!sender) return
+
+      // Enforce chat permission (housemaster always allowed)
+      if (!sender.isHousemaster && sender.canChat === false) {
+        sendToClient(connection.ws, { type: 'error', message: 'Chat gesperrt' })
+        return
+      }
+
+      // Validate text
+      const cleanText = String(text || '').trim().slice(0, 500)
+      if (!cleanText) return
+
+      const msg = {
+        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        type: replyTo ? 'direct' : 'chat',
+        text: cleanText,
+        senderId: sessionId,
+        senderName: sender.name,
+        senderColor: sender.color || '#ffffff',
+        timestamp: Date.now(),
+        replyTo: replyTo || null
+      }
+
+      // Store in house history (max 50)
+      house.chatMessages.push(msg)
+      if (house.chatMessages.length > 50) house.chatMessages.shift()
+
+      // Broadcast to all in house
+      broadcastToHouse(connection.houseCode, {
+        type: 'chatMessage',
+        data: msg
+      })
+
+      console.log(`💬 [${connection.houseCode}] ${sender.name}: ${cleanText.substring(0, 40)}`)
+      break
+    }
+
+    case 'raiseHand': {
+      const { sessionId, hasQuestion, questionText } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const raiser = house.rooms.get(sessionId)
+      if (!raiser) return
+
+      // No duplicates
+      if (house.handQueue.find(h => h.sessionId === sessionId)) break
+
+      const entry = {
+        sessionId,
+        name: raiser.name,
+        color: raiser.color || '#ffffff',
+        hasQuestion: !!hasQuestion,
+        questionText: String(questionText || '').slice(0, 100),
+        raisedAt: Date.now()
+      }
+
+      house.handQueue.push(entry)
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'handRaised',
+        data: entry
+      })
+
+      console.log(`✋ [${connection.houseCode}] ${raiser.name} raised hand${hasQuestion ? ' with question' : ''}`)
+      break
+    }
+
+    case 'lowerHand': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      house.handQueue = house.handQueue.filter(h => h.sessionId !== sessionId)
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'handLowered',
+        data: { sessionId }
+      })
+      break
+    }
+
+    case 'callOnStudent': {
+      const { sessionId, targetSessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      // Only housemaster can call on students
+      const caller = house.rooms.get(sessionId)
+      if (!caller || !caller.isHousemaster) return
+
+      house.handQueue = house.handQueue.filter(h => h.sessionId !== targetSessionId)
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'handCalledOn',
+        data: { sessionId: targetSessionId }
+      })
+
+      const calledRoom = house.rooms.get(targetSessionId)
+      console.log(`👆 [${connection.houseCode}] ${caller.name} called on ${calledRoom?.name || targetSessionId}`)
+      break
+    }
+
+    case 'lowerAllHands': {
+      const { sessionId } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const caller = house.rooms.get(sessionId)
+      if (!caller || !caller.isHousemaster) return
+
+      house.handQueue = []
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'allHandsLowered',
+        data: {}
+      })
+      break
+    }
+
+    case 'setChatPermission': {
+      const { sessionId, targetSessionId, canChat, all } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const caller = house.rooms.get(sessionId)
+      if (!caller || !caller.isHousemaster) {
+        sendToClient(connection.ws, { type: 'error', message: 'Only Housemaster can change chat permissions' })
+        return
+      }
+
+      if (all) {
+        house.rooms.forEach(r => {
+          if (!r.isHousemaster) r.canChat = canChat
+        })
+        console.log(`💬 Chat permission set to ${canChat} for ALL in house ${connection.houseCode}`)
+      } else if (targetSessionId) {
+        const target = house.rooms.get(targetSessionId)
+        if (target && !target.isHousemaster) {
+          target.canChat = canChat
+          console.log(`💬 Chat permission set to ${canChat} for ${target.name} in house ${connection.houseCode}`)
+        }
+      }
+
+      broadcastToHouse(connection.houseCode, {
+        type: 'rooms',
+        data: getRoomsList(house)
+      })
+      break
+    }
+
+    case 'pushChatView': {
+      const { sessionId, state } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const caller = house.rooms.get(sessionId)
+      if (!caller || !caller.isHousemaster) return
+
+      // Broadcast to all except housemaster
+      house.rooms.forEach(room => {
+        if (!room.isHousemaster) {
+          sendToClient(room.ws, {
+            type: 'chatViewPushed',
+            data: { state: state || 'panel' }
+          })
+        }
+      })
+
+      console.log(`📱 [${connection.houseCode}] Housemaster pushed chat view: ${state}`)
       break
     }
 
