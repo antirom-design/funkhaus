@@ -1469,11 +1469,14 @@ function handleMessage(ws, message) {
 
       if (house.chatMode === 'all2host') {
         if (sender.isHousemaster) {
-          // Host message with replyTo: send to target student + host self
           if (replyTo) {
+            // Host reply to specific student
             sendToRoom(connection.houseCode, replyTo, chatMsg)
+            sendToClient(connection.ws, chatMsg)
+          } else {
+            // Host message with no target: broadcast to all
+            broadcastToHouse(connection.houseCode, chatMsg)
           }
-          sendToClient(connection.ws, chatMsg)
         } else {
           // Student message: send to housemaster + sender self
           sendToHousemaster(connection.houseCode, chatMsg)
