@@ -92,7 +92,8 @@ function getHouse(houseCode) {
       housemaster: null,
       tafelStrokes: new Map(),  // strokeId -> stroke data
       chatMessages: [],         // last 50 chat messages
-      handQueue: []             // raise-hand queue [{sessionId, name, color, hasQuestion, questionText, raisedAt}]
+      handQueue: [],            // raise-hand queue [{sessionId, name, color, hasQuestion, questionText, raisedAt}]
+      chatMode: 'all2all'       // 'all2all' or 'all2host'
     })
   }
   return houses.get(houseCode)
@@ -249,6 +250,16 @@ function sendToRoom(houseCode, targetSessionId, message) {
   }
 }
 
+function sendToHousemaster(houseCode, message) {
+  const house = houses.get(houseCode)
+  if (!house) return
+  house.rooms.forEach(room => {
+    if (room.isHousemaster) {
+      sendToClient(room.ws, message)
+    }
+  })
+}
+
 // Generate random grid for circle sort game
 function generateCircleGrid(gridSize, colorCount = 3) {
   // Color palettes based on count
@@ -340,7 +351,8 @@ function handleMessage(ws, message) {
           rooms: getRoomsList(house),
           tafelStrokes: Array.from(house.tafelStrokes.values()),
           chatMessages: house.chatMessages || [],
-          handQueue: house.handQueue || []
+          handQueue: house.handQueue || [],
+          chatMode: house.chatMode || 'all2all'
         }
       })
 
@@ -1453,11 +1465,24 @@ function handleMessage(ws, message) {
       house.chatMessages.push(msg)
       if (house.chatMessages.length > 50) house.chatMessages.shift()
 
-      // Broadcast to all in house
-      broadcastToHouse(connection.houseCode, {
-        type: 'chatMessage',
-        data: msg
-      })
+      const chatMsg = { type: 'chatMessage', data: msg }
+
+      if (house.chatMode === 'all2host') {
+        if (sender.isHousemaster) {
+          // Host message with replyTo: send to target student + host self
+          if (replyTo) {
+            sendToRoom(connection.houseCode, replyTo, chatMsg)
+          }
+          sendToClient(connection.ws, chatMsg)
+        } else {
+          // Student message: send to housemaster + sender self
+          sendToHousemaster(connection.houseCode, chatMsg)
+          sendToClient(connection.ws, chatMsg)
+        }
+      } else {
+        // all2all: broadcast to everyone
+        broadcastToHouse(connection.houseCode, chatMsg)
+      }
 
       console.log(`💬 [${connection.houseCode}] ${sender.name}: ${cleanText.substring(0, 40)}`)
       break
@@ -1589,6 +1614,28 @@ function handleMessage(ws, message) {
         type: 'rooms',
         data: getRoomsList(house)
       })
+      break
+    }
+
+    case 'setChatMode': {
+      const { sessionId, mode } = data
+      const connection = connections.get(sessionId)
+      if (!connection) return
+
+      const house = houses.get(connection.houseCode)
+      if (!house) return
+
+      const caller = house.rooms.get(sessionId)
+      if (!caller || !caller.isHousemaster) return
+
+      if (mode === 'all2all' || mode === 'all2host') {
+        house.chatMode = mode
+        broadcastToHouse(connection.houseCode, {
+          type: 'chatModeChanged',
+          data: { mode }
+        })
+        console.log(`💬 Chat mode changed to ${mode} in house ${connection.houseCode}`)
+      }
       break
     }
 
